@@ -40,6 +40,7 @@ All non-secret integration settings are stored in `wrangler.toml` under `[vars]`
 | LINE channel secret | `LINE_CHANNEL_SECRET` | `wrangler secret put LINE_CHANNEL_SECRET` |
 | LINE channel access token | `LINE_CHANNEL_ACCESS_TOKEN` | `wrangler secret put LINE_CHANNEL_ACCESS_TOKEN` |
 | OpenAI API key | `OPENAI_API_KEY` | `wrangler secret put OPENAI_API_KEY` |
+| Admin API token | `ADMIN_API_TOKEN` | `wrangler secret put ADMIN_API_TOKEN` |
 
 ## Missing Secret Setup Commands
 
@@ -49,6 +50,7 @@ Run these locally before deployment:
 wrangler secret put LINE_CHANNEL_SECRET
 wrangler secret put LINE_CHANNEL_ACCESS_TOKEN
 wrangler secret put OPENAI_API_KEY
+wrangler secret put ADMIN_API_TOKEN
 ```
 
 ## LINE OA Webhook

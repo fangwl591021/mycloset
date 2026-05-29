@@ -73,7 +73,7 @@ export default {
       try {
         return await routeApi(request, env, url);
       } catch (error) {
-        return json({ error: error.message || "Internal error" }, 500);
+        return json({ error: error.message || "Internal error" }, error.status || 500);
       }
     }
 
@@ -96,6 +96,7 @@ async function routeApi(request, env, url) {
         image_model: env.OPENAI_IMAGE_MODEL || "gpt-image-1.5",
         api_key_configured: Boolean(env.OPENAI_API_KEY)
       },
+      admin_api_token_configured: Boolean(env.ADMIN_API_TOKEN),
       storage: {
         provider: env.STORAGE_PROVIDER || "wasabi",
         access_key_configured: Boolean(env.WASABI_ACCESS_KEY_ID),
@@ -122,6 +123,7 @@ async function routeApi(request, env, url) {
   }
 
   if (method === "POST" && path === "/api/products") {
+    requireAdmin(request, env);
     return createProduct(request, env);
   }
 
@@ -149,6 +151,7 @@ async function routeApi(request, env, url) {
 
   const reviewMatch = path.match(/^\/api\/outfits\/([^/]+)\/review$/);
   if (method === "POST" && reviewMatch) {
+    requireAdmin(request, env);
     return reviewOutfit(request, env, reviewMatch[1]);
   }
 
@@ -157,6 +160,7 @@ async function routeApi(request, env, url) {
   }
 
   if (method === "GET" && path === "/api/admin/overview") {
+    requireAdmin(request, env);
     return getAdminOverview(env);
   }
 
@@ -451,6 +455,8 @@ function getIntegrationParams(env) {
       webhook_url: env.LINE_WEBHOOK_URL || `${env.PUBLIC_BASE_URL || "https://mycloset.fangwl591021.workers.dev"}/line/webhook`,
       liff_url: env.LINE_LIFF_URL || env.PUBLIC_BASE_URL || "https://mycloset.fangwl591021.workers.dev/",
       reply_enabled: env.LINE_REPLY_ENABLED !== "false",
+      signature_secret_configured: Boolean(env.LINE_CHANNEL_SECRET),
+      access_token_configured: Boolean(env.LINE_CHANNEL_ACCESS_TOKEN),
       secrets_required: [
         "LINE_CHANNEL_SECRET",
         "LINE_CHANNEL_ACCESS_TOKEN"
@@ -461,7 +467,8 @@ function getIntegrationParams(env) {
       "WASABI_SECRET_ACCESS_KEY",
       "LINE_CHANNEL_SECRET",
       "LINE_CHANNEL_ACCESS_TOKEN",
-      "OPENAI_API_KEY"
+      "OPENAI_API_KEY",
+      "ADMIN_API_TOKEN"
     ]
   };
 }
@@ -595,6 +602,21 @@ function requireFields(body, fields) {
     if (body[field] === undefined || body[field] === null || body[field] === "") {
       throw new Error(`Missing required field: ${field}`);
     }
+  }
+}
+
+function requireAdmin(request, env) {
+  if (!env.ADMIN_API_TOKEN) {
+    throw new Error("ADMIN_API_TOKEN is not configured");
+  }
+  const authorization = request.headers.get("authorization") || "";
+  const bearerToken = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
+  const headerToken = request.headers.get("x-admin-token") || "";
+  const token = bearerToken || headerToken;
+  if (!token || !timingSafeEqual(token, env.ADMIN_API_TOKEN)) {
+    const error = new Error("Admin authorization required");
+    error.status = 401;
+    throw error;
   }
 }
 

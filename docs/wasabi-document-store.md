@@ -50,3 +50,25 @@ GET /api/admin/overview
 GET /api/line/webhook
 POST /line/webhook
 ```
+
+## Admin-Protected Endpoints
+
+These endpoints require either:
+
+```text
+Authorization: Bearer {ADMIN_API_TOKEN}
+```
+
+or:
+
+```text
+x-admin-token: {ADMIN_API_TOKEN}
+```
+
+Protected routes:
+
+```text
+POST /api/products
+POST /api/outfits/{id}/review
+GET /api/admin/overview
+```
