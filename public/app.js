@@ -1,9 +1,12 @@
 const overviewEl = document.querySelector("#overview");
 const refreshOverviewButton = document.querySelector("#refreshOverview");
+const adminTokenInput = document.querySelector("#adminToken");
+const saveAdminTokenButton = document.querySelector("#saveAdminToken");
 const productForm = document.querySelector("#productForm");
 const productResult = document.querySelector("#productResult");
 const tryonForm = document.querySelector("#tryonForm");
 const tryonResult = document.querySelector("#tryonResult");
+const ADMIN_TOKEN_KEY = "mycloset_admin_token";
 
 const metricLabels = {
   products: "商品",
@@ -14,20 +17,26 @@ const metricLabels = {
 };
 
 refreshOverviewButton.addEventListener("click", loadOverview);
+saveAdminTokenButton.addEventListener("click", saveAdminToken);
 productForm.addEventListener("submit", submitProduct);
 tryonForm.addEventListener("submit", submitTryon);
 
+adminTokenInput.value = localStorage.getItem(ADMIN_TOKEN_KEY) || "";
 loadOverview();
 
 async function loadOverview() {
-  const data = await api("/api/admin/overview");
-  const overview = data.overview || {};
-  overviewEl.innerHTML = Object.entries(metricLabels)
-    .map(([key, label]) => {
-      const value = overview[key] ?? 0;
-      return `<div class="metric"><strong>${value}</strong><span>${label}</span></div>`;
-    })
-    .join("");
+  try {
+    const data = await api("/api/admin/overview", adminOptions());
+    const overview = data.overview || {};
+    overviewEl.innerHTML = Object.entries(metricLabels)
+      .map(([key, label]) => {
+        const value = overview[key] ?? 0;
+        return `<div class="metric"><strong>${value}</strong><span>${label}</span></div>`;
+      })
+      .join("");
+  } catch (error) {
+    overviewEl.innerHTML = `<div class="notice">${escapeHtml(error.message)}</div>`;
+  }
 }
 
 async function submitProduct(event) {
@@ -35,6 +44,7 @@ async function submitProduct(event) {
   const payload = Object.fromEntries(new FormData(productForm).entries());
   payload.price = Number(payload.price || 0);
   const data = await api("/api/products", {
+    ...adminOptions(),
     method: "POST",
     body: JSON.stringify(payload)
   });
@@ -53,6 +63,22 @@ async function submitTryon(event) {
   await loadOverview();
 }
 
+function saveAdminToken() {
+  localStorage.setItem(ADMIN_TOKEN_KEY, adminTokenInput.value.trim());
+  loadOverview();
+}
+
+function adminOptions() {
+  const token = adminTokenInput.value.trim();
+  return token
+    ? {
+        headers: {
+          "x-admin-token": token
+        }
+      }
+    : {};
+}
+
 async function api(path, options = {}) {
   const response = await fetch(path, {
     headers: {
@@ -66,4 +92,13 @@ async function api(path, options = {}) {
     throw new Error(data.error || `Request failed: ${response.status}`);
   }
   return data;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }

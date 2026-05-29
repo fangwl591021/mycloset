@@ -35,6 +35,16 @@ select {
   gap: 12px;
 }
 
+.admin-tools {
+  align-items: end;
+  display: flex;
+  gap: 10px;
+}
+
+.admin-tools label {
+  min-width: 220px;
+}
+
 .topbar span {
   color: #69706d;
   font-size: 14px;
@@ -190,6 +200,15 @@ h2 {
 .metric span {
   color: #69706d;
   font-size: 13px;
+}
+
+.notice {
+  background: #fff5e6;
+  border: 1px solid #e5bd75;
+  border-radius: 8px;
+  color: #5c3a05;
+  grid-column: 1 / -1;
+  padding: 14px;
 }
 
 .grid-form {
