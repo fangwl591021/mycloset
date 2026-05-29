@@ -22,8 +22,10 @@ tonyuse/mycloset/shops/Uxxxxxxxx/line/2026/05/event001.json
 
 - The Worker no longer binds or calls D1.
 - API responses include `storage_mode: "wasabi-document"` where relevant.
-- The current MVP keeps demo records in Worker isolate memory so deployment is not blocked by D1.
-- The next storage step is to wire `saveDocument` and `readDocument` to Wasabi S3 `PutObject` and `GetObject` using Worker secrets.
+- The Worker signs Wasabi S3 requests with AWS Signature Version 4.
+- Product, avatar, try-on, outfit, point, and LINE webhook records are written with `PutObject`.
+- Product lists, avatar lookup, try-on lookup, outfit review, and admin overview read records with `ListObjectsV2` and `GetObject`.
+- A small in-memory demo product remains only as a fallback if Wasabi has no product records yet.
 
 ## Required Secrets For Real Wasabi Writes
 
@@ -33,3 +35,18 @@ wrangler secret put WASABI_SECRET_ACCESS_KEY
 ```
 
 These secrets must remain in Cloudflare Worker secrets only.
+
+## Live Verification Endpoints
+
+```text
+GET /api/health
+GET /api/storage/location
+GET /api/products
+POST /api/products
+POST /api/avatars
+POST /api/tryons
+POST /api/outfits
+GET /api/admin/overview
+GET /api/line/webhook
+POST /line/webhook
+```

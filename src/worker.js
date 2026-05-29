@@ -96,7 +96,11 @@ async function routeApi(request, env, url) {
         image_model: env.OPENAI_IMAGE_MODEL || "gpt-image-1.5",
         api_key_configured: Boolean(env.OPENAI_API_KEY)
       },
-      storage_provider: env.STORAGE_PROVIDER || "wasabi",
+      storage: {
+        provider: env.STORAGE_PROVIDER || "wasabi",
+        access_key_configured: Boolean(env.WASABI_ACCESS_KEY_ID),
+        secret_key_configured: Boolean(env.WASABI_SECRET_ACCESS_KEY)
+      },
       face_similarity_threshold: Number(env.FACE_SIMILARITY_THRESHOLD || 0.8)
     });
   }
@@ -162,11 +166,14 @@ async function routeApi(request, env, url) {
 async function listProducts(env, url) {
   const category = url.searchParams.get("category");
   const status = url.searchParams.get("status") || "active";
-  const products = [...store.products.values()]
+  const products = await listDocumentsByCategory(env, "products");
+  const fallbackProducts = [...store.products.values()];
+  const source = products.length > 0 ? products : fallbackProducts;
+  const filtered = source
     .filter((product) => product.status === status)
     .filter((product) => !category || product.category === category)
     .slice(0, 100);
-  return json({ products, storage_mode: "wasabi-document" });
+  return json({ products: filtered, storage_mode: "wasabi-document" });
 }
 
 async function createProduct(request, env) {
@@ -193,6 +200,7 @@ async function createProduct(request, env) {
     storage_key: buildDocumentKey(env, body.merchant_id || "default-shop", "products", `${id}.json`)
   };
   store.products.set(id, product);
+  await putJsonDocument(env, product.storage_key, product);
 
   return json({ id, status: "created", product, storage_mode: "wasabi-document" }, 201);
 }
@@ -219,12 +227,14 @@ async function upsertAvatar(request, env) {
     storage_key: buildDocumentKey(env, body.user_id, "members", `${id}.json`)
   };
   store.avatars.set(id, avatar);
+  await putJsonDocument(env, avatar.storage_key, avatar);
 
   return json({ id, status: "saved", avatar, storage_mode: "wasabi-document" });
 }
 
 async function getAvatar(env, userId) {
-  const avatar = [...store.avatars.values()].find((item) => item.user_id === userId) || null;
+  const avatarDocuments = await listDocumentsForOwnerCategory(env, userId, "members");
+  const avatar = avatarDocuments[0] || [...store.avatars.values()].find((item) => item.user_id === userId) || null;
   return json({ avatar, storage_mode: "wasabi-document" });
 }
 
@@ -257,9 +267,13 @@ async function createTryon(request, env) {
     storage_key: buildDocumentKey(env, body.user_id, "tryons", `${id}.json`)
   };
   store.tryons.set(id, tryon);
+  await putJsonDocument(env, tryon.storage_key, tryon);
 
   const product = store.products.get(body.product_id);
-  if (product) product.tryon_count += 1;
+  if (product) {
+    product.tryon_count += 1;
+    await putJsonDocument(env, product.storage_key, product);
+  }
 
   return json({
     id,
@@ -271,7 +285,7 @@ async function createTryon(request, env) {
 }
 
 async function getTryon(env, id) {
-  const tryon = store.tryons.get(id);
+  const tryon = store.tryons.get(id) || await findDocumentById(env, "tryons", id);
   if (!tryon) return json({ error: "Try-on job not found" }, 404);
   return json({ tryon, storage_mode: "wasabi-document" });
 }
@@ -295,6 +309,7 @@ async function createOutfit(request, env) {
     storage_key: buildDocumentKey(env, body.user_id, "outfits", `${id}.json`)
   };
   store.outfits.set(id, outfit);
+  await putJsonDocument(env, outfit.storage_key, outfit);
 
   await addPoints(env, body.user_id, "outfit", id, POINTS.submit_outfit, "submit_outfit");
   return json({ id, review_status: "pending", outfit, storage_mode: "wasabi-document" }, 201);
@@ -307,10 +322,12 @@ async function reviewOutfit(request, env, id) {
     return json({ error: "review_status must be approved or rejected" }, 400);
   }
 
-  const outfit = store.outfits.get(id);
+  const outfit = store.outfits.get(id) || await findDocumentById(env, "outfits", id);
   if (!outfit) return json({ error: "Outfit not found" }, 404);
   outfit.review_status = body.review_status;
   outfit.reviewed_at = new Date().toISOString();
+  store.outfits.set(id, outfit);
+  await putJsonDocument(env, outfit.storage_key, outfit);
 
   if (body.review_status === "approved") {
     await addPoints(env, outfit.user_id, "outfit", id, POINTS.approved_review, "approved_review");
@@ -327,29 +344,44 @@ async function createSocialAction(request, env) {
 
   if (body.target_type === "outfit" && body.action === "like") {
     const outfit = store.outfits.get(body.target_id);
-    if (outfit) outfit.like_count += 1;
+    if (outfit) {
+      outfit.like_count += 1;
+      await putJsonDocument(env, outfit.storage_key, outfit);
+    }
   }
 
   if (body.target_type === "outfit" && body.action === "collect") {
     const outfit = store.outfits.get(body.target_id);
-    if (outfit) outfit.collection_count += 1;
+    if (outfit) {
+      outfit.collection_count += 1;
+      await putJsonDocument(env, outfit.storage_key, outfit);
+    }
   }
 
   if (body.target_type === "product" && body.action === "conversion") {
     const product = store.products.get(body.target_id);
-    if (product) product.conversion_count += 1;
+    if (product) {
+      product.conversion_count += 1;
+      await putJsonDocument(env, product.storage_key, product);
+    }
   }
 
   return json({ id, status: "recorded" }, 201);
 }
 
 async function getAdminOverview(env) {
+  const [products, avatars, tryons, outfits] = await Promise.all([
+    listDocumentsByCategory(env, "products"),
+    listDocumentsByCategory(env, "members"),
+    listDocumentsByCategory(env, "tryons"),
+    listDocumentsByCategory(env, "outfits")
+  ]);
   const overview = {
-    products: store.products.size,
-    avatars: store.avatars.size,
-    tryons: store.tryons.size,
-    outfits: store.outfits.size,
-    pending_reviews: [...store.outfits.values()].filter((outfit) => outfit.review_status === "pending").length,
+    products: products.length || store.products.size,
+    avatars: avatars.length || store.avatars.size,
+    tryons: tryons.length || store.tryons.size,
+    outfits: outfits.length || store.outfits.size,
+    pending_reviews: (outfits.length ? outfits : [...store.outfits.values()]).filter((outfit) => outfit.review_status === "pending").length,
     storage_mode: "wasabi-document"
   };
 
@@ -484,7 +516,7 @@ async function verifyLineSignature(rawBody, signature, channelSecret) {
 }
 
 async function recordLineEvent(env, event) {
-  store.lineEvents.push({
+  const lineEvent = {
     id: crypto.randomUUID(),
     line_event_type: event.type || "unknown",
     line_user_id: event.source?.userId || null,
@@ -492,7 +524,9 @@ async function recordLineEvent(env, event) {
     payload: event,
     storage_key: buildDocumentKey(env, event.source?.userId || "unknown", "line", `${Date.now()}-${crypto.randomUUID()}.json`),
     created_at: new Date().toISOString()
-  });
+  };
+  store.lineEvents.push(lineEvent);
+  await putJsonDocument(env, lineEvent.storage_key, lineEvent);
 }
 
 function shouldReplyLineEvent(env, event) {
@@ -534,15 +568,18 @@ async function replyLineMessage(env, replyToken, text) {
 }
 
 async function addPoints(env, userId, sourceType, sourceId, points, reason) {
-  store.points.push({
+  const pointRecord = {
     id: crypto.randomUUID(),
     user_id: userId,
     source_type: sourceType,
     source_id: sourceId,
     points,
     reason,
+    storage_key: buildDocumentKey(env, userId, "points", `${Date.now()}-${crypto.randomUUID()}.json`),
     created_at: new Date().toISOString()
-  });
+  };
+  store.points.push(pointRecord);
+  await putJsonDocument(env, pointRecord.storage_key, pointRecord);
 }
 
 async function readJson(request) {
@@ -578,8 +615,200 @@ function buildDocumentKey(env, ownerId, category, filename) {
   return `${basePrefix}shops/${ownerId}/${category}/${yyyy}/${mm}/${filename}`;
 }
 
+async function putJsonDocument(env, key, document) {
+  if (!hasWasabiSecrets(env)) return { skipped: true, reason: "missing_wasabi_secrets" };
+  const body = JSON.stringify(document, null, 2);
+  const response = await wasabiRequest(env, "PUT", key, {
+    body,
+    contentType: "application/json; charset=utf-8"
+  });
+  if (!response.ok) {
+    throw new Error(`Wasabi PutObject failed: ${response.status}`);
+  }
+  return { ok: true, key };
+}
+
+async function getJsonDocument(env, key) {
+  if (!hasWasabiSecrets(env)) return null;
+  const response = await wasabiRequest(env, "GET", key);
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(`Wasabi GetObject failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+async function listDocumentsByCategory(env, category) {
+  if (!hasWasabiSecrets(env)) return [];
+  const basePrefix = normalizePrefix(env.WASABI_ALLOWED_PREFIX || env.WASABI_BASE_PREFIX || "tonyuse/mycloset");
+  const keys = await listWasabiKeys(env, basePrefix);
+  const categoryKeys = keys
+    .filter((key) => key.includes(`/${category}/`) && key.endsWith(".json"))
+    .slice(0, 100);
+  const documents = await Promise.all(categoryKeys.map((key) => getJsonDocument(env, key).catch(() => null)));
+  return documents.filter(Boolean);
+}
+
+async function listDocumentsForOwnerCategory(env, ownerId, category) {
+  if (!hasWasabiSecrets(env)) return [];
+  const basePrefix = normalizePrefix(env.WASABI_ALLOWED_PREFIX || env.WASABI_BASE_PREFIX || "tonyuse/mycloset");
+  const prefix = `${basePrefix}shops/${ownerId}/${category}/`;
+  const keys = await listWasabiKeys(env, prefix);
+  const documents = await Promise.all(keys.filter((key) => key.endsWith(".json")).map((key) => getJsonDocument(env, key).catch(() => null)));
+  return documents.filter(Boolean);
+}
+
+async function findDocumentById(env, category, id) {
+  const documents = await listDocumentsByCategory(env, category);
+  return documents.find((document) => document.id === id) || null;
+}
+
+async function listWasabiKeys(env, prefix) {
+  const response = await wasabiRequest(env, "GET", "", {
+    query: {
+      "list-type": "2",
+      prefix,
+      "max-keys": "1000"
+    }
+  });
+  if (!response.ok) {
+    throw new Error(`Wasabi ListObjectsV2 failed: ${response.status}`);
+  }
+  const xml = await response.text();
+  return [...xml.matchAll(/<Key>(.*?)<\/Key>/g)].map((match) => decodeXml(match[1]));
+}
+
+async function wasabiRequest(env, method, key, options = {}) {
+  const body = options.body || "";
+  const contentType = options.contentType || "";
+  const query = options.query || {};
+  const endpoint = new URL(env.WASABI_ENDPOINT || "https://s3.us-west-1.wasabisys.com");
+  const bucket = env.WASABI_BUCKET || "tonyuse";
+  const region = env.WASABI_REGION || "us-west-1";
+  const forcePathStyle = env.WASABI_FORCE_PATH_STYLE !== "false";
+  const canonicalUri = forcePathStyle ? `/${bucket}${key ? `/${encodePath(key)}` : ""}` : `/${encodePath(key)}`;
+  const canonicalQuery = canonicalizeQuery(query);
+  const url = `${endpoint.origin}${canonicalUri}${canonicalQuery ? `?${canonicalQuery}` : ""}`;
+  const now = new Date();
+  const amzDate = toAmzDate(now);
+  const dateStamp = amzDate.slice(0, 8);
+  const payloadHash = await sha256Hex(body);
+
+  const canonicalHeadersMap = {
+    host: endpoint.host,
+    "x-amz-content-sha256": payloadHash,
+    "x-amz-date": amzDate
+  };
+
+  if (contentType) {
+    canonicalHeadersMap["content-type"] = contentType;
+  }
+
+  const signedHeaderNames = Object.keys(canonicalHeadersMap).sort();
+  const canonicalHeaders = signedHeaderNames.map((name) => `${name}:${canonicalHeadersMap[name]}\n`).join("");
+  const signedHeaders = signedHeaderNames.join(";");
+  const canonicalRequest = [
+    method,
+    canonicalUri,
+    canonicalQuery,
+    canonicalHeaders,
+    signedHeaders,
+    payloadHash
+  ].join("\n");
+  const credentialScope = `${dateStamp}/${region}/s3/aws4_request`;
+  const stringToSign = [
+    "AWS4-HMAC-SHA256",
+    amzDate,
+    credentialScope,
+    await sha256Hex(canonicalRequest)
+  ].join("\n");
+  const signingKey = await getSignatureKey(env.WASABI_SECRET_ACCESS_KEY, dateStamp, region, "s3");
+  const signature = await hmacHex(signingKey, stringToSign);
+  const authorization = `AWS4-HMAC-SHA256 Credential=${env.WASABI_ACCESS_KEY_ID}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+  const headers = {
+    authorization,
+    "x-amz-content-sha256": payloadHash,
+    "x-amz-date": amzDate
+  };
+  if (contentType) {
+    headers["content-type"] = contentType;
+  }
+
+  return fetch(url, {
+    method,
+    headers,
+    body: method === "GET" || method === "HEAD" ? undefined : body
+  });
+}
+
 function splitCsv(value) {
   return value.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function hasWasabiSecrets(env) {
+  return Boolean(env.WASABI_ACCESS_KEY_ID && env.WASABI_SECRET_ACCESS_KEY);
+}
+
+function canonicalizeQuery(query) {
+  return Object.entries(query)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `${encodeRfc3986(key)}=${encodeRfc3986(value)}`)
+    .join("&");
+}
+
+function encodePath(path) {
+  return path.split("/").map((part) => encodeRfc3986(part)).join("/");
+}
+
+function encodeRfc3986(value) {
+  return encodeURIComponent(String(value)).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+
+function toAmzDate(date) {
+  return date.toISOString().replace(/[:-]|\.\d{3}/g, "");
+}
+
+async function sha256Hex(value) {
+  const data = typeof value === "string" ? new TextEncoder().encode(value) : value;
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return bytesToHex(new Uint8Array(digest));
+}
+
+async function hmacBytes(key, value) {
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    key instanceof Uint8Array ? key : new TextEncoder().encode(key),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signature = await crypto.subtle.sign("HMAC", cryptoKey, new TextEncoder().encode(value));
+  return new Uint8Array(signature);
+}
+
+async function hmacHex(key, value) {
+  return bytesToHex(await hmacBytes(key, value));
+}
+
+async function getSignatureKey(secret, dateStamp, regionName, serviceName) {
+  const kDate = await hmacBytes(`AWS4${secret}`, dateStamp);
+  const kRegion = await hmacBytes(kDate, regionName);
+  const kService = await hmacBytes(kRegion, serviceName);
+  return hmacBytes(kService, "aws4_request");
+}
+
+function bytesToHex(bytes) {
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function decodeXml(value) {
+  return value
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&amp;", "&")
+    .replaceAll("&quot;", "\"")
+    .replaceAll("&apos;", "'");
 }
 
 function bytesToBase64(bytes) {
