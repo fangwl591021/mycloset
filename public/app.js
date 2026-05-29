@@ -74,6 +74,7 @@ loadProducts();
 loadOutfits();
 loadOverview();
 renderAvatarPhotoPreview();
+loadAvatarForUser(avatarForm.elements.user_id.value);
 
 async function initLogin() {
   try {
@@ -124,6 +125,7 @@ function lineLogout() {
 function applyLineProfile(profile) {
   const memberId = `line:${profile.userId}`;
   setMemberId(memberId);
+  loadAvatarForUser(memberId);
   setLoginStatus(`已登入：${profile.displayName || profile.userId}`, "ok");
   lineLoginButton.hidden = true;
   lineLogoutButton.hidden = false;
@@ -165,6 +167,77 @@ function renderAvatarPhotoPreview() {
     `;
   });
   avatarPhotoPreview.innerHTML = cards.join("");
+}
+
+async function loadAvatarForUser(userId) {
+  if (!userId) return;
+  try {
+    const data = await api(`/api/avatars/${encodeURIComponent(userId)}`);
+    if (!data.avatar) {
+      setFormResult(avatarResult, "pending", "尚未建立 Avatar");
+      return;
+    }
+    const avatar = data.avatar;
+    tryonForm.elements.user_id.value = avatar.user_id;
+    tryonForm.elements.avatar_id.value = avatar.id;
+    avatarForm.elements.face_id.value = avatar.face_id || avatarForm.elements.face_id.value;
+    avatarForm.elements.body_type.value = avatar.body_type || avatarForm.elements.body_type.value;
+    avatarForm.elements.skin_tone.value = avatar.skin_tone || avatarForm.elements.skin_tone.value;
+    avatarForm.elements.hair_style.value = avatar.hair_style || avatarForm.elements.hair_style.value;
+    avatarForm.elements.status.value = avatar.status || avatarForm.elements.status.value;
+    const photos = await presignAvatarPhotoViews(avatar);
+    avatarPhotoPreview.innerHTML = renderAvatarPhotoCards(photos, true);
+    avatarResult.innerHTML = renderSavedAvatarResult(avatar, photos);
+    avatarResult.className = "form-result form-result-ok";
+    avatarResult.querySelector("[data-avatar-id]")?.addEventListener("click", (clickEvent) => {
+      tryonForm.elements.user_id.value = avatar.user_id;
+      tryonForm.elements.avatar_id.value = clickEvent.currentTarget.dataset.avatarId;
+      tryonResult.textContent = `已帶入 Avatar ${clickEvent.currentTarget.dataset.avatarId}`;
+    });
+  } catch (error) {
+    avatarResult.className = "form-result form-result-error";
+    avatarResult.textContent = `讀取已建立 Avatar 失敗：${error.message}`;
+  }
+}
+
+async function presignAvatarPhotoViews(avatar) {
+  const entries = avatarPhotoFields.map(([fieldName, label]) => ({
+    fieldName,
+    label,
+    key: avatar[`${fieldName}_key`] || avatar[`${fieldName}_url`] || ""
+  }));
+  return Promise.all(entries.map(async (entry) => {
+    if (!entry.key) return entry;
+    try {
+      const filename = entry.key.split("/").pop() || `${entry.fieldName}.jpg`;
+      const presign = await api("/api/storage/presign", {
+        method: "POST",
+        body: JSON.stringify({
+          owner_id: avatar.user_id,
+          category: "members",
+          filename,
+          method: "GET",
+          key: entry.key
+        })
+      });
+      return { ...entry, viewUrl: presign.url };
+    } catch {
+      return entry;
+    }
+  }));
+}
+
+function renderAvatarPhotoCards(photos, showStatus) {
+  return photos.map((photo) => {
+    const imageUrl = photo.previewUrl || photo.viewUrl || "";
+    return `
+      <div class="avatar-photo-card ${imageUrl ? "" : "avatar-photo-empty"}">
+        ${imageUrl ? `<img src="${imageUrl}" alt="${escapeHtml(photo.label)}">` : ""}
+        <span>${escapeHtml(photo.label)}</span>
+        <strong>${showStatus ? (photo.key ? "已寫入" : "未寫入") : escapeHtml(photo.filename || "No file")}</strong>
+      </div>
+    `;
+  }).join("");
 }
 
 async function loadOverview() {
@@ -554,16 +627,10 @@ function renderAvatarResult(data, payload) {
   const photos = avatarPhotoFields.map(([fieldName, label]) => ({
     label,
     previewUrl: avatarPhotoPreviewUrls.get(fieldName) || "",
-    key: avatar[`${fieldName}_key`] || payload[`${fieldName}_key`] || ""
+    key: avatar[`${fieldName}_key`] || avatar[`${fieldName}_url`] || payload[`${fieldName}_key`] || payload[`${fieldName}_url`] || ""
   }));
   const uploadedCount = photos.filter((photo) => photo.key).length;
-  const photoHtml = photos.map((photo) => `
-    <div class="avatar-photo-card">
-      ${photo.previewUrl ? `<img src="${photo.previewUrl}" alt="${escapeHtml(photo.label)}">` : ""}
-      <span>${escapeHtml(photo.label)}</span>
-      <strong>${photo.key ? "Uploaded" : "Missing"}</strong>
-    </div>
-  `).join("");
+  const photoHtml = renderAvatarPhotoCards(photos, true);
   return `
     <div class="result-summary">
       <strong>Avatar 建立成功</strong>
@@ -573,6 +640,21 @@ function renderAvatarResult(data, payload) {
       <span>狀態：${escapeHtml(avatar.status || payload.status || "ready")}</span>
       <div class="avatar-photo-grid avatar-photo-result">${photoHtml}</div>
       <button type="button" data-avatar-id="${escapeHtml(data.id || avatar.id || "")}">帶入試穿</button>
+    </div>
+  `;
+}
+
+function renderSavedAvatarResult(avatar, photos) {
+  const uploadedCount = photos.filter((photo) => photo.key).length;
+  return `
+    <div class="result-summary">
+      <strong>已讀取已建立 Avatar</strong>
+      <span>Avatar ID：${escapeHtml(avatar.id || "")}</span>
+      <span>使用者 ID：${escapeHtml(avatar.user_id || "")}</span>
+      <span>照片已寫入：${uploadedCount} / 4</span>
+      <span>狀態：${escapeHtml(avatar.status || "ready")}</span>
+      <div class="avatar-photo-grid avatar-photo-result">${renderAvatarPhotoCards(photos, true)}</div>
+      <button type="button" data-avatar-id="${escapeHtml(avatar.id || "")}">帶入試穿</button>
     </div>
   `;
 }

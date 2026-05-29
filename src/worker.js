@@ -348,9 +348,13 @@ async function upsertAvatar(request, env) {
     waist_line: numberOrNull(body.waist_line),
     leg_length: numberOrNull(body.leg_length),
     photo_front_url: body.photo_front_url || null,
+    photo_front_key: body.photo_front_key || body.photo_front_url || null,
     photo_left_45_url: body.photo_left_45_url || null,
+    photo_left_45_key: body.photo_left_45_key || body.photo_left_45_url || null,
     photo_right_45_url: body.photo_right_45_url || null,
+    photo_right_45_key: body.photo_right_45_key || body.photo_right_45_url || null,
     photo_full_body_url: body.photo_full_body_url || null,
+    photo_full_body_key: body.photo_full_body_key || body.photo_full_body_url || null,
     status: body.status || "draft",
     storage_key: buildDocumentKey(env, body.user_id, "members", `${id}.json`),
     created_at: new Date().toISOString()
@@ -363,7 +367,11 @@ async function upsertAvatar(request, env) {
 
 async function getAvatar(env, userId) {
   const avatarDocuments = await listDocumentsForOwnerCategory(env, userId, "members");
-  const avatar = avatarDocuments[0] || [...store.avatars.values()].find((item) => item.user_id === userId) || null;
+  const fallbackDocuments = avatarDocuments.length > 0 ? [] : await listDocumentsByCategory(env, "members");
+  const avatar = findLatestAvatarForUser(userId, avatarDocuments)
+    || findLatestAvatarForUser(userId, fallbackDocuments)
+    || [...store.avatars.values()].find((item) => item.user_id === userId)
+    || null;
   return json({ avatar, storage_mode: "wasabi-document" });
 }
 
@@ -451,7 +459,17 @@ async function createStylistAdvice(request, env) {
 
 async function getAvatarRecord(env, userId) {
   const avatarDocuments = await listDocumentsForOwnerCategory(env, userId, "members");
-  return avatarDocuments[0] || [...store.avatars.values()].find((item) => item.user_id === userId) || null;
+  const fallbackDocuments = avatarDocuments.length > 0 ? [] : await listDocumentsByCategory(env, "members");
+  return findLatestAvatarForUser(userId, avatarDocuments)
+    || findLatestAvatarForUser(userId, fallbackDocuments)
+    || [...store.avatars.values()].find((item) => item.user_id === userId)
+    || null;
+}
+
+function findLatestAvatarForUser(userId, avatars) {
+  return avatars
+    .filter((avatar) => avatar.user_id === userId)
+    .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))[0] || null;
 }
 
 async function callOpenAIStylist(env, context) {
