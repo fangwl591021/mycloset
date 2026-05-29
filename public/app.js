@@ -9,7 +9,18 @@ const productListEl = document.querySelector("#productList");
 const refreshProductsButton = document.querySelector("#refreshProducts");
 const tryonForm = document.querySelector("#tryonForm");
 const tryonResult = document.querySelector("#tryonResult");
+const outfitForm = document.querySelector("#outfitForm");
+const outfitResult = document.querySelector("#outfitResult");
+const avatarForm = document.querySelector("#avatarForm");
+const avatarResult = document.querySelector("#avatarResult");
+const refreshPointsButton = document.querySelector("#refreshPoints");
+const refreshEligibilityButton = document.querySelector("#refreshEligibility");
+const memberResult = document.querySelector("#memberResult");
+const outfitListEl = document.querySelector("#outfitList");
+const outfitFilter = document.querySelector("#outfitFilter");
+const refreshOutfitsButton = document.querySelector("#refreshOutfits");
 const ADMIN_TOKEN_KEY = "mycloset_admin_token";
+let lastTryon = null;
 
 const metricLabels = {
   products: "商品",
@@ -24,9 +35,16 @@ saveAdminTokenButton.addEventListener("click", saveAdminToken);
 productForm.addEventListener("submit", submitProduct);
 refreshProductsButton.addEventListener("click", loadProducts);
 tryonForm.addEventListener("submit", submitTryon);
+outfitForm.addEventListener("submit", submitOutfit);
+avatarForm.addEventListener("submit", submitAvatar);
+refreshPointsButton.addEventListener("click", loadPoints);
+refreshEligibilityButton.addEventListener("click", loadEligibility);
+refreshOutfitsButton.addEventListener("click", loadOutfits);
+outfitFilter.addEventListener("change", loadOutfits);
 
 adminTokenInput.value = localStorage.getItem(ADMIN_TOKEN_KEY) || "";
 loadProducts();
+loadOutfits();
 loadOverview();
 
 async function loadOverview() {
@@ -75,10 +93,57 @@ async function submitTryon(event) {
       method: "POST",
       body: JSON.stringify(payload)
     });
+    lastTryon = {
+      id: data.id,
+      user_id: payload.user_id,
+      result_image: data.result_image
+    };
     tryonResult.textContent = JSON.stringify(data, null, 2);
     await loadOverview();
   } catch (error) {
     tryonResult.textContent = error.message;
+  }
+}
+
+async function submitOutfit(event) {
+  event.preventDefault();
+  try {
+    if (!lastTryon) {
+      throw new Error("請先建立試穿結果");
+    }
+    outfitResult.textContent = "投稿中...";
+    const payload = Object.fromEntries(new FormData(outfitForm).entries());
+    payload.user_id = lastTryon.user_id;
+    payload.tryon_job_id = lastTryon.id;
+    payload.image_url = lastTryon.result_image;
+    const data = await api("/api/outfits", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    outfitResult.textContent = JSON.stringify(data, null, 2);
+    await loadOutfits();
+    await loadPoints();
+    await loadOverview();
+  } catch (error) {
+    outfitResult.textContent = error.message;
+  }
+}
+
+async function submitAvatar(event) {
+  event.preventDefault();
+  try {
+    avatarResult.textContent = "儲存中...";
+    const payload = Object.fromEntries(new FormData(avatarForm).entries());
+    const data = await api("/api/avatars", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    avatarResult.textContent = JSON.stringify(data, null, 2);
+    tryonForm.elements.user_id.value = payload.user_id;
+    tryonForm.elements.avatar_id.value = data.id;
+    await loadOverview();
+  } catch (error) {
+    avatarResult.textContent = error.message;
   }
 }
 
@@ -101,6 +166,85 @@ async function loadProducts() {
   } catch (error) {
     productListEl.innerHTML = `<div class="notice">${escapeHtml(error.message)}</div>`;
   }
+}
+
+async function loadOutfits() {
+  outfitListEl.innerHTML = `<div class="notice">穿搭讀取中...</div>`;
+  try {
+    const status = outfitFilter.value;
+    const data = await api(`/api/outfits${status ? `?review_status=${encodeURIComponent(status)}` : ""}`);
+    const outfits = data.outfits || [];
+    if (outfits.length === 0) {
+      outfitListEl.innerHTML = `<div class="notice">目前沒有穿搭投稿。</div>`;
+      return;
+    }
+    outfitListEl.innerHTML = outfits.map(renderOutfit).join("");
+    outfitListEl.querySelectorAll("[data-social]").forEach((button) => {
+      button.addEventListener("click", () => createSocial(button.dataset.social, button.dataset.target));
+    });
+    outfitListEl.querySelectorAll("[data-review]").forEach((button) => {
+      button.addEventListener("click", () => reviewOutfit(button.dataset.target, button.dataset.review));
+    });
+  } catch (error) {
+    outfitListEl.innerHTML = `<div class="notice">${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function renderOutfit(outfit) {
+  return `
+    <article class="outfit-item">
+      <div class="outfit-preview">${escapeHtml(outfit.style || "style")}</div>
+      <div>
+        <strong>${escapeHtml(outfit.description || "未填描述")}</strong>
+        <span>${escapeHtml(outfit.user_id)} · ${escapeHtml(outfit.review_status)}</span>
+        <span>like ${Number(outfit.like_count || 0)} · collect ${Number(outfit.collection_count || 0)}</span>
+      </div>
+      <div class="button-row">
+        <button type="button" data-social="like" data-target="${escapeHtml(outfit.id)}">按讚</button>
+        <button type="button" data-social="collect" data-target="${escapeHtml(outfit.id)}">收藏</button>
+        <button type="button" data-review="approved" data-target="${escapeHtml(outfit.id)}">通過</button>
+        <button type="button" data-review="rejected" data-target="${escapeHtml(outfit.id)}">拒絕</button>
+      </div>
+    </article>
+  `;
+}
+
+async function createSocial(action, targetId) {
+  const userId = tryonForm.elements.user_id.value || "demo-user-001";
+  await api("/api/social", {
+    method: "POST",
+    body: JSON.stringify({
+      user_id: userId,
+      target_type: "outfit",
+      target_id: targetId,
+      action
+    })
+  });
+  await loadOutfits();
+  await loadPoints();
+}
+
+async function reviewOutfit(id, reviewStatus) {
+  await api(`/api/outfits/${encodeURIComponent(id)}/review`, {
+    ...adminOptions(),
+    method: "POST",
+    body: JSON.stringify({ review_status: reviewStatus })
+  });
+  await loadOutfits();
+  await loadPoints();
+  await loadOverview();
+}
+
+async function loadPoints() {
+  const userId = tryonForm.elements.user_id.value || "demo-user-001";
+  const data = await api(`/api/points/${encodeURIComponent(userId)}`);
+  memberResult.textContent = JSON.stringify(data, null, 2);
+}
+
+async function loadEligibility() {
+  const userId = tryonForm.elements.user_id.value || "demo-user-001";
+  const data = await api(`/api/ambassadors/${encodeURIComponent(userId)}/eligibility`);
+  memberResult.textContent = JSON.stringify(data, null, 2);
 }
 
 function renderProduct(product) {

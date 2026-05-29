@@ -41,7 +41,8 @@ const store = {
         tryon_count: 0,
         collection_count: 0,
         conversion_count: 0,
-        storage_key: "tonyuse/mycloset/shops/demo-merchant-001/products/2026/05/cloth001.json"
+        storage_key: "tonyuse/mycloset/shops/demo-merchant-001/products/2026/05/cloth001.json",
+        created_at: "2026-05-29T00:00:00.000Z"
       }
     ]
   ]),
@@ -149,6 +150,10 @@ async function routeApi(request, env, url) {
     return createOutfit(request, env);
   }
 
+  if (method === "GET" && path === "/api/outfits") {
+    return listOutfits(env, url);
+  }
+
   const reviewMatch = path.match(/^\/api\/outfits\/([^/]+)\/review$/);
   if (method === "POST" && reviewMatch) {
     requireAdmin(request, env);
@@ -157,6 +162,16 @@ async function routeApi(request, env, url) {
 
   if (method === "POST" && path === "/api/social") {
     return createSocialAction(request, env);
+  }
+
+  const pointsMatch = path.match(/^\/api\/points\/([^/]+)$/);
+  if (method === "GET" && pointsMatch) {
+    return getUserPoints(env, pointsMatch[1]);
+  }
+
+  const eligibilityMatch = path.match(/^\/api\/ambassadors\/([^/]+)\/eligibility$/);
+  if (method === "GET" && eligibilityMatch) {
+    return getAmbassadorEligibility(env, eligibilityMatch[1]);
   }
 
   if (method === "GET" && path === "/api/admin/overview") {
@@ -201,7 +216,8 @@ async function createProduct(request, env) {
     tryon_count: 0,
     collection_count: 0,
     conversion_count: 0,
-    storage_key: buildDocumentKey(env, body.merchant_id || "default-shop", "products", `${id}.json`)
+    storage_key: buildDocumentKey(env, body.merchant_id || "default-shop", "products", `${id}.json`),
+    created_at: new Date().toISOString()
   };
   store.products.set(id, product);
   await putJsonDocument(env, product.storage_key, product);
@@ -228,7 +244,8 @@ async function upsertAvatar(request, env) {
     photo_right_45_url: body.photo_right_45_url || null,
     photo_full_body_url: body.photo_full_body_url || null,
     status: body.status || "draft",
-    storage_key: buildDocumentKey(env, body.user_id, "members", `${id}.json`)
+    storage_key: buildDocumentKey(env, body.user_id, "members", `${id}.json`),
+    created_at: new Date().toISOString()
   };
   store.avatars.set(id, avatar);
   await putJsonDocument(env, avatar.storage_key, avatar);
@@ -268,14 +285,16 @@ async function createTryon(request, env) {
     face_similarity_score: providerResult.face_similarity_score,
     retry_count: providerResult.retry_count,
     error_message: status === "rejected" ? "Face similarity below threshold" : null,
-    storage_key: buildDocumentKey(env, body.user_id, "tryons", `${id}.json`)
+    storage_key: buildDocumentKey(env, body.user_id, "tryons", `${id}.json`),
+    created_at: new Date().toISOString()
   };
   store.tryons.set(id, tryon);
   await putJsonDocument(env, tryon.storage_key, tryon);
 
-  const product = store.products.get(body.product_id);
+  const product = store.products.get(body.product_id) || await findDocumentById(env, "products", body.product_id);
   if (product) {
     product.tryon_count += 1;
+    store.products.set(product.id, product);
     await putJsonDocument(env, product.storage_key, product);
   }
 
@@ -310,13 +329,29 @@ async function createOutfit(request, env) {
     like_count: 0,
     collection_count: 0,
     share_count: 0,
-    storage_key: buildDocumentKey(env, body.user_id, "outfits", `${id}.json`)
+    storage_key: buildDocumentKey(env, body.user_id, "outfits", `${id}.json`),
+    created_at: new Date().toISOString()
   };
   store.outfits.set(id, outfit);
   await putJsonDocument(env, outfit.storage_key, outfit);
 
   await addPoints(env, body.user_id, "outfit", id, POINTS.submit_outfit, "submit_outfit");
   return json({ id, review_status: "pending", outfit, storage_mode: "wasabi-document" }, 201);
+}
+
+async function listOutfits(env, url) {
+  const reviewStatus = url.searchParams.get("review_status");
+  const userId = url.searchParams.get("user_id");
+  const style = url.searchParams.get("style");
+  const documents = await listDocumentsByCategory(env, "outfits");
+  const source = documents.length > 0 ? documents : [...store.outfits.values()];
+  const outfits = source
+    .filter((outfit) => !reviewStatus || outfit.review_status === reviewStatus)
+    .filter((outfit) => !userId || outfit.user_id === userId)
+    .filter((outfit) => !style || outfit.style === style)
+    .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
+    .slice(0, 100);
+  return json({ outfits, storage_mode: "wasabi-document" });
 }
 
 async function reviewOutfit(request, env, id) {
@@ -344,33 +379,80 @@ async function createSocialAction(request, env) {
   const body = await readJson(request);
   requireFields(body, ["user_id", "target_type", "target_id", "action"]);
   const id = crypto.randomUUID();
-  store.socialActions.push({ id, ...body, created_at: new Date().toISOString() });
+  const action = {
+    id,
+    ...body,
+    storage_key: buildDocumentKey(env, body.user_id, "social", `${Date.now()}-${id}.json`),
+    created_at: new Date().toISOString()
+  };
+  store.socialActions.push(action);
+  await putJsonDocument(env, action.storage_key, action);
 
   if (body.target_type === "outfit" && body.action === "like") {
-    const outfit = store.outfits.get(body.target_id);
+    const outfit = store.outfits.get(body.target_id) || await findDocumentById(env, "outfits", body.target_id);
     if (outfit) {
       outfit.like_count += 1;
+      store.outfits.set(outfit.id, outfit);
       await putJsonDocument(env, outfit.storage_key, outfit);
+      await addPoints(env, outfit.user_id, "social", id, POINTS.liked, "liked");
     }
   }
 
   if (body.target_type === "outfit" && body.action === "collect") {
-    const outfit = store.outfits.get(body.target_id);
+    const outfit = store.outfits.get(body.target_id) || await findDocumentById(env, "outfits", body.target_id);
     if (outfit) {
       outfit.collection_count += 1;
+      store.outfits.set(outfit.id, outfit);
       await putJsonDocument(env, outfit.storage_key, outfit);
+      await addPoints(env, outfit.user_id, "social", id, POINTS.collected, "collected");
     }
   }
 
   if (body.target_type === "product" && body.action === "conversion") {
-    const product = store.products.get(body.target_id);
+    const product = store.products.get(body.target_id) || await findDocumentById(env, "products", body.target_id);
     if (product) {
       product.conversion_count += 1;
+      store.products.set(product.id, product);
       await putJsonDocument(env, product.storage_key, product);
+      await addPoints(env, body.user_id, "social", id, POINTS.conversion, "conversion");
     }
   }
 
   return json({ id, status: "recorded" }, 201);
+}
+
+async function getUserPoints(env, userId) {
+  const documents = await listDocumentsForOwnerCategory(env, userId, "points");
+  const source = documents.length > 0 ? documents : store.points.filter((point) => point.user_id === userId);
+  const total = source.reduce((sum, point) => sum + Number(point.points || 0), 0);
+  return json({ user_id: userId, total, entries: source.slice(0, 100), storage_mode: "wasabi-document" });
+}
+
+async function getAmbassadorEligibility(env, userId) {
+  const [outfits, socialActions] = await Promise.all([
+    listDocumentsForOwnerCategory(env, userId, "outfits"),
+    listDocumentsByCategory(env, "social")
+  ]);
+  const userOutfits = outfits.length > 0 ? outfits : [...store.outfits.values()].filter((outfit) => outfit.user_id === userId);
+  const approvedOutfits = userOutfits.filter((outfit) => outfit.review_status === "approved");
+  const collections = userOutfits.reduce((sum, outfit) => sum + Number(outfit.collection_count || 0), 0);
+  const conversions = socialActions.filter((action) => action.user_id === userId && action.action === "conversion").length;
+  const thresholds = {
+    approved_posts: 20,
+    collections: 500,
+    conversions: 50
+  };
+  return json({
+    user_id: userId,
+    eligible: approvedOutfits.length > thresholds.approved_posts && collections > thresholds.collections && conversions > thresholds.conversions,
+    current: {
+      approved_posts: approvedOutfits.length,
+      collections,
+      conversions
+    },
+    thresholds,
+    storage_mode: "wasabi-document"
+  });
 }
 
 async function getAdminOverview(env) {

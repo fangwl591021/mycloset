@@ -117,7 +117,8 @@ main {
 }
 
 .tryon-panel,
-.dashboard article {
+.dashboard article,
+.workflow article {
   background: #ffffff;
   border: 1px solid #ddd8cf;
   border-radius: 8px;
@@ -186,14 +187,16 @@ pre {
   padding: 12px;
 }
 
-.dashboard {
+.dashboard,
+.workflow {
   display: grid;
   gap: 24px;
   grid-template-columns: 1fr 1fr;
   margin-top: 28px;
 }
 
-.catalog {
+.catalog,
+.outfit-wall {
   background: #ffffff;
   border: 1px solid #ddd8cf;
   border-radius: 8px;
@@ -239,6 +242,55 @@ pre {
 
 .product-meta {
   min-width: 120px;
+}
+
+.outfit-list {
+  display: grid;
+  gap: 12px;
+}
+
+.outfit-item {
+  align-items: center;
+  border: 1px solid #ddd8cf;
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 86px minmax(0, 1fr) auto;
+  padding: 14px;
+}
+
+.outfit-preview {
+  align-items: center;
+  aspect-ratio: 1;
+  background: #d8e2da;
+  border-radius: 8px;
+  color: #1f3d36;
+  display: flex;
+  font-size: 13px;
+  justify-content: center;
+  text-align: center;
+}
+
+.outfit-item strong,
+.outfit-item span {
+  display: block;
+}
+
+.outfit-item span {
+  color: #69706d;
+  font-size: 13px;
+}
+
+.button-row,
+.user-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.button-row button {
+  min-height: 34px;
+  padding: 0 10px;
 }
 
 h2 {
@@ -303,12 +355,14 @@ h2 {
 
   .hero,
   .dashboard,
+  .workflow,
   .grid-form {
     grid-template-columns: 1fr;
   }
 
   .section-head,
-  .product-item {
+  .product-item,
+  .outfit-item {
     align-items: stretch;
     grid-template-columns: 1fr;
   }
