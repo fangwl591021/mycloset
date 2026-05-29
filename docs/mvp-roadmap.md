@@ -2,7 +2,7 @@
 
 ## Phase 0: Foundation
 
-- Set up Worker routes, static UI, D1 schema, and R2 bindings.
+- Set up Worker routes, static UI, Wasabi object-key rules, and JSON document records.
 - Keep the AI provider replaceable.
 - Store identity-preservation policy fields from day one.
 - Track try-on usage per merchant for SaaS limits.
@@ -48,7 +48,7 @@ Acceptance:
 
 - Popular/latest/category feeds work.
 - Model profile shows approved outfits and counters.
-- Ambassador eligibility can be audited from database rows.
+- Ambassador eligibility can be audited from JSON document records.
 
 ## Phase 4: SaaS Backoffice
 

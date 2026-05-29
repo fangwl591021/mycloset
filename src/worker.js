@@ -24,6 +24,35 @@ const POINTS = {
   conversion: 100
 };
 
+const store = {
+  products: new Map([
+    [
+      "cloth001",
+      {
+        id: "cloth001",
+        merchant_id: "demo-merchant-001",
+        name: "商務西裝外套",
+        brand: "BrandA",
+        category: "jacket",
+        color: "navy",
+        price: 3990,
+        image_url: "/demo/cloth001.jpg",
+        status: "active",
+        tryon_count: 0,
+        collection_count: 0,
+        conversion_count: 0,
+        storage_key: "tonyuse/mycloset/shops/demo-merchant-001/products/2026/05/cloth001.json"
+      }
+    ]
+  ]),
+  avatars: new Map(),
+  tryons: new Map(),
+  outfits: new Map(),
+  socialActions: [],
+  points: [],
+  lineEvents: []
+};
+
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") {
@@ -133,17 +162,11 @@ async function routeApi(request, env, url) {
 async function listProducts(env, url) {
   const category = url.searchParams.get("category");
   const status = url.searchParams.get("status") || "active";
-  let query = "SELECT * FROM products WHERE status = ?";
-  const params = [status];
-
-  if (category) {
-    query += " AND category = ?";
-    params.push(category);
-  }
-
-  query += " ORDER BY created_at DESC LIMIT 100";
-  const { results } = await env.DB.prepare(query).bind(...params).all();
-  return json({ products: results });
+  const products = [...store.products.values()]
+    .filter((product) => product.status === status)
+    .filter((product) => !category || product.category === category)
+    .slice(0, 100);
+  return json({ products, storage_mode: "wasabi-document" });
 }
 
 async function createProduct(request, env) {
@@ -154,80 +177,55 @@ async function createProduct(request, env) {
   }
 
   const id = body.id || crypto.randomUUID();
-  await env.DB.prepare(
-    `INSERT INTO products (id, merchant_id, name, brand, category, color, price, image_url, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  )
-    .bind(
-      id,
-      body.merchant_id || null,
-      body.name,
-      body.brand || null,
-      body.category,
-      body.color || null,
-      Number(body.price || 0),
-      body.image_url || null,
-      body.status || "active"
-    )
-    .run();
+  const product = {
+    id,
+    merchant_id: body.merchant_id || "default-shop",
+    name: body.name,
+    brand: body.brand || null,
+    category: body.category,
+    color: body.color || null,
+    price: Number(body.price || 0),
+    image_url: body.image_url || null,
+    status: body.status || "active",
+    tryon_count: 0,
+    collection_count: 0,
+    conversion_count: 0,
+    storage_key: buildDocumentKey(env, body.merchant_id || "default-shop", "products", `${id}.json`)
+  };
+  store.products.set(id, product);
 
-  return json({ id, status: "created" }, 201);
+  return json({ id, status: "created", product, storage_mode: "wasabi-document" }, 201);
 }
 
 async function upsertAvatar(request, env) {
   const body = await readJson(request);
   requireFields(body, ["user_id", "face_id", "skin_tone", "hair_style"]);
   const id = body.id || crypto.randomUUID();
+  const avatar = {
+    id,
+    user_id: body.user_id,
+    face_id: body.face_id,
+    body_type: body.body_type || "normal",
+    skin_tone: body.skin_tone,
+    hair_style: body.hair_style,
+    shoulder_width: numberOrNull(body.shoulder_width),
+    waist_line: numberOrNull(body.waist_line),
+    leg_length: numberOrNull(body.leg_length),
+    photo_front_url: body.photo_front_url || null,
+    photo_left_45_url: body.photo_left_45_url || null,
+    photo_right_45_url: body.photo_right_45_url || null,
+    photo_full_body_url: body.photo_full_body_url || null,
+    status: body.status || "draft",
+    storage_key: buildDocumentKey(env, body.user_id, "members", `${id}.json`)
+  };
+  store.avatars.set(id, avatar);
 
-  await env.DB.prepare(
-    `INSERT INTO avatar_profiles (
-      id, user_id, face_id, body_type, skin_tone, hair_style, shoulder_width, waist_line, leg_length,
-      photo_front_url, photo_left_45_url, photo_right_45_url, photo_full_body_url, status
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET
-      face_id = excluded.face_id,
-      body_type = excluded.body_type,
-      skin_tone = excluded.skin_tone,
-      hair_style = excluded.hair_style,
-      shoulder_width = excluded.shoulder_width,
-      waist_line = excluded.waist_line,
-      leg_length = excluded.leg_length,
-      photo_front_url = excluded.photo_front_url,
-      photo_left_45_url = excluded.photo_left_45_url,
-      photo_right_45_url = excluded.photo_right_45_url,
-      photo_full_body_url = excluded.photo_full_body_url,
-      status = excluded.status,
-      updated_at = datetime('now')`
-  )
-    .bind(
-      id,
-      body.user_id,
-      body.face_id,
-      body.body_type || "normal",
-      body.skin_tone,
-      body.hair_style,
-      numberOrNull(body.shoulder_width),
-      numberOrNull(body.waist_line),
-      numberOrNull(body.leg_length),
-      body.photo_front_url || null,
-      body.photo_left_45_url || null,
-      body.photo_right_45_url || null,
-      body.photo_full_body_url || null,
-      body.status || "draft"
-    )
-    .run();
-
-  return json({ id, status: "saved" });
+  return json({ id, status: "saved", avatar, storage_mode: "wasabi-document" });
 }
 
 async function getAvatar(env, userId) {
-  const { results } = await env.DB.prepare(
-    "SELECT * FROM avatar_profiles WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1"
-  )
-    .bind(userId)
-    .all();
-
-  return json({ avatar: results[0] || null });
+  const avatar = [...store.avatars.values()].find((item) => item.user_id === userId) || null;
+  return json({ avatar, storage_mode: "wasabi-document" });
 }
 
 async function createTryon(request, env) {
@@ -244,67 +242,62 @@ async function createTryon(request, env) {
   const threshold = Number(env.FACE_SIMILARITY_THRESHOLD || 0.8);
   const status = providerResult.face_similarity_score >= threshold ? "completed" : "rejected";
 
-  await env.DB.prepare(
-    `INSERT INTO tryon_jobs (
-      id, user_id, avatar_id, product_id, provider, provider_job_id, status,
-      result_image_url, face_similarity_score, retry_count, error_message
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  )
-    .bind(
-      id,
-      body.user_id,
-      body.avatar_id,
-      body.product_id,
-      providerResult.provider,
-      providerResult.provider_job_id,
-      status,
-      providerResult.result_image_url,
-      providerResult.face_similarity_score,
-      providerResult.retry_count,
-      status === "rejected" ? "Face similarity below threshold" : null
-    )
-    .run();
+  const tryon = {
+    id,
+    user_id: body.user_id,
+    avatar_id: body.avatar_id,
+    product_id: body.product_id,
+    provider: providerResult.provider,
+    provider_job_id: providerResult.provider_job_id,
+    status,
+    result_image_url: providerResult.result_image_url,
+    face_similarity_score: providerResult.face_similarity_score,
+    retry_count: providerResult.retry_count,
+    error_message: status === "rejected" ? "Face similarity below threshold" : null,
+    storage_key: buildDocumentKey(env, body.user_id, "tryons", `${id}.json`)
+  };
+  store.tryons.set(id, tryon);
 
-  await env.DB.prepare("UPDATE products SET tryon_count = tryon_count + 1, updated_at = datetime('now') WHERE id = ?")
-    .bind(body.product_id)
-    .run();
+  const product = store.products.get(body.product_id);
+  if (product) product.tryon_count += 1;
 
   return json({
     id,
     status,
     result_image: providerResult.result_image_url,
-    face_similarity_score: providerResult.face_similarity_score
+    face_similarity_score: providerResult.face_similarity_score,
+    storage_mode: "wasabi-document"
   }, 201);
 }
 
 async function getTryon(env, id) {
-  const row = await env.DB.prepare("SELECT * FROM tryon_jobs WHERE id = ?").bind(id).first();
-  if (!row) return json({ error: "Try-on job not found" }, 404);
-  return json({ tryon: row });
+  const tryon = store.tryons.get(id);
+  if (!tryon) return json({ error: "Try-on job not found" }, 404);
+  return json({ tryon, storage_mode: "wasabi-document" });
 }
 
 async function createOutfit(request, env) {
   const body = await readJson(request);
   requireFields(body, ["user_id", "image_url"]);
   const id = crypto.randomUUID();
-
-  await env.DB.prepare(
-    `INSERT INTO outfits (id, user_id, tryon_job_id, image_url, style, description, ai_review_status)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  )
-    .bind(
-      id,
-      body.user_id,
-      body.tryon_job_id || null,
-      body.image_url,
-      body.style || null,
-      body.description || null,
-      body.ai_review_status || "pending"
-    )
-    .run();
+  const outfit = {
+    id,
+    user_id: body.user_id,
+    tryon_job_id: body.tryon_job_id || null,
+    image_url: body.image_url,
+    style: body.style || null,
+    description: body.description || null,
+    ai_review_status: body.ai_review_status || "pending",
+    review_status: "pending",
+    like_count: 0,
+    collection_count: 0,
+    share_count: 0,
+    storage_key: buildDocumentKey(env, body.user_id, "outfits", `${id}.json`)
+  };
+  store.outfits.set(id, outfit);
 
   await addPoints(env, body.user_id, "outfit", id, POINTS.submit_outfit, "submit_outfit");
-  return json({ id, review_status: "pending" }, 201);
+  return json({ id, review_status: "pending", outfit, storage_mode: "wasabi-document" }, 201);
 }
 
 async function reviewOutfit(request, env, id) {
@@ -314,14 +307,10 @@ async function reviewOutfit(request, env, id) {
     return json({ error: "review_status must be approved or rejected" }, 400);
   }
 
-  const outfit = await env.DB.prepare("SELECT * FROM outfits WHERE id = ?").bind(id).first();
+  const outfit = store.outfits.get(id);
   if (!outfit) return json({ error: "Outfit not found" }, 404);
-
-  await env.DB.prepare(
-    "UPDATE outfits SET review_status = ?, reviewed_at = datetime('now') WHERE id = ?"
-  )
-    .bind(body.review_status, id)
-    .run();
+  outfit.review_status = body.review_status;
+  outfit.reviewed_at = new Date().toISOString();
 
   if (body.review_status === "approved") {
     await addPoints(env, outfit.user_id, "outfit", id, POINTS.approved_review, "approved_review");
@@ -334,43 +323,35 @@ async function createSocialAction(request, env) {
   const body = await readJson(request);
   requireFields(body, ["user_id", "target_type", "target_id", "action"]);
   const id = crypto.randomUUID();
-
-  await env.DB.prepare(
-    `INSERT OR IGNORE INTO social_actions (id, user_id, target_type, target_id, action)
-     VALUES (?, ?, ?, ?, ?)`
-  )
-    .bind(id, body.user_id, body.target_type, body.target_id, body.action)
-    .run();
+  store.socialActions.push({ id, ...body, created_at: new Date().toISOString() });
 
   if (body.target_type === "outfit" && body.action === "like") {
-    await env.DB.prepare("UPDATE outfits SET like_count = like_count + 1 WHERE id = ?").bind(body.target_id).run();
+    const outfit = store.outfits.get(body.target_id);
+    if (outfit) outfit.like_count += 1;
   }
 
   if (body.target_type === "outfit" && body.action === "collect") {
-    await env.DB.prepare("UPDATE outfits SET collection_count = collection_count + 1 WHERE id = ?").bind(body.target_id).run();
+    const outfit = store.outfits.get(body.target_id);
+    if (outfit) outfit.collection_count += 1;
   }
 
   if (body.target_type === "product" && body.action === "conversion") {
-    await env.DB.prepare("UPDATE products SET conversion_count = conversion_count + 1 WHERE id = ?").bind(body.target_id).run();
+    const product = store.products.get(body.target_id);
+    if (product) product.conversion_count += 1;
   }
 
   return json({ id, status: "recorded" }, 201);
 }
 
 async function getAdminOverview(env) {
-  const keys = [
-    ["products", "SELECT COUNT(*) AS count FROM products"],
-    ["avatars", "SELECT COUNT(*) AS count FROM avatar_profiles"],
-    ["tryons", "SELECT COUNT(*) AS count FROM tryon_jobs"],
-    ["outfits", "SELECT COUNT(*) AS count FROM outfits"],
-    ["pending_reviews", "SELECT COUNT(*) AS count FROM outfits WHERE review_status = 'pending'"]
-  ];
-  const overview = {};
-
-  for (const [key, query] of keys) {
-    const row = await env.DB.prepare(query).first();
-    overview[key] = row?.count || 0;
-  }
+  const overview = {
+    products: store.products.size,
+    avatars: store.avatars.size,
+    tryons: store.tryons.size,
+    outfits: store.outfits.size,
+    pending_reviews: [...store.outfits.values()].filter((outfit) => outfit.review_status === "pending").length,
+    storage_mode: "wasabi-document"
+  };
 
   return json({ overview });
 }
@@ -503,19 +484,15 @@ async function verifyLineSignature(rawBody, signature, channelSecret) {
 }
 
 async function recordLineEvent(env, event) {
-  if (!env.DB) return;
-  await env.DB.prepare(
-    `INSERT INTO line_webhook_events (id, line_event_type, line_user_id, reply_token, payload_json)
-     VALUES (?, ?, ?, ?, ?)`
-  )
-    .bind(
-      crypto.randomUUID(),
-      event.type || "unknown",
-      event.source?.userId || null,
-      event.replyToken || null,
-      JSON.stringify(event)
-    )
-    .run();
+  store.lineEvents.push({
+    id: crypto.randomUUID(),
+    line_event_type: event.type || "unknown",
+    line_user_id: event.source?.userId || null,
+    reply_token: event.replyToken || null,
+    payload: event,
+    storage_key: buildDocumentKey(env, event.source?.userId || "unknown", "line", `${Date.now()}-${crypto.randomUUID()}.json`),
+    created_at: new Date().toISOString()
+  });
 }
 
 function shouldReplyLineEvent(env, event) {
@@ -557,11 +534,15 @@ async function replyLineMessage(env, replyToken, text) {
 }
 
 async function addPoints(env, userId, sourceType, sourceId, points, reason) {
-  await env.DB.prepare(
-    "INSERT INTO point_ledger (id, user_id, source_type, source_id, points, reason) VALUES (?, ?, ?, ?, ?, ?)"
-  )
-    .bind(crypto.randomUUID(), userId, sourceType, sourceId, points, reason)
-    .run();
+  store.points.push({
+    id: crypto.randomUUID(),
+    user_id: userId,
+    source_type: sourceType,
+    source_id: sourceId,
+    points,
+    reason,
+    created_at: new Date().toISOString()
+  });
 }
 
 async function readJson(request) {
@@ -587,6 +568,14 @@ function numberOrNull(value) {
 
 function normalizePrefix(prefix) {
   return prefix.replace(/^\/+/, "").replace(/\/?$/, "/");
+}
+
+function buildDocumentKey(env, ownerId, category, filename) {
+  const basePrefix = normalizePrefix(env.WASABI_ALLOWED_PREFIX || env.WASABI_BASE_PREFIX || "tonyuse/mycloset");
+  const now = new Date();
+  const yyyy = String(now.getUTCFullYear());
+  const mm = String(now.getUTCMonth() + 1).padStart(2, "0");
+  return `${basePrefix}shops/${ownerId}/${category}/${yyyy}/${mm}/${filename}`;
 }
 
 function splitCsv(value) {

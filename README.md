@@ -27,15 +27,14 @@ Tagline:
 
 - Frontend: static LIFF-ready UI in `public/`
 - Backend: Cloudflare Worker in `src/worker.js`
-- Database: Cloudflare D1, schema in `schema.sql`
-- Storage: Wasabi S3-compatible object storage for photos and generated try-on images
+- Data model: JSON document records addressed by Wasabi object keys
+- Storage: Wasabi S3-compatible object storage for photos, generated try-on images, and JSON records
 - AI: replaceable provider adapter under `/api/tryons`
 
 ## Local Files
 
 - `docs/product-spec.md`: Version 1.0 product spec
 - `docs/mvp-roadmap.md`: implementation roadmap
-- `schema.sql`: D1 table definitions
 - `src/worker.js`: Worker API and static asset routing
 - `public/index.html`: operator/demo UI
 
@@ -60,13 +59,10 @@ Tagline:
 
 ## Deploy Notes
 
-1. Create D1 database and update `wrangler.toml`.
-2. Configure Wasabi secrets with `wrangler secret put WASABI_ACCESS_KEY_ID` and `wrangler secret put WASABI_SECRET_ACCESS_KEY`.
-3. Configure LINE secrets with `wrangler secret put LINE_CHANNEL_SECRET` and `wrangler secret put LINE_CHANNEL_ACCESS_TOKEN`.
-4. Configure GPT/OpenAI secret with `wrangler secret put OPENAI_API_KEY`.
-5. Run `wrangler d1 execute my-closet-ai-db --file schema.sql`.
-6. Optional demo data: `wrangler d1 execute my-closet-ai-db --file seed.sql`.
-7. Deploy with `wrangler deploy`.
+1. Configure Wasabi secrets with `wrangler secret put WASABI_ACCESS_KEY_ID` and `wrangler secret put WASABI_SECRET_ACCESS_KEY`.
+2. Configure LINE secrets with `wrangler secret put LINE_CHANNEL_SECRET` and `wrangler secret put LINE_CHANNEL_ACCESS_TOKEN`.
+3. Configure GPT/OpenAI secret with `wrangler secret put OPENAI_API_KEY`.
+4. Deploy with `wrangler deploy`.
 
 The current AI provider is a stub so the workflow can be tested before choosing OpenAI Image, FASHN API, Genlook Try-On API, another commercial API, or a self-hosted VITON model.
 
