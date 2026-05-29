@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>My Closet AI</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <strong>My Closet AI</strong>
+        <span>AI 真人虛擬試穿 SaaS</span>
+      </div>
+      <button id="refreshOverview" type="button">更新後台</button>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-copy">
+          <p>讓顧客先穿，再下單。</p>
+          <h1>看見自己穿上的樣子，才是真正的成交開始。</h1>
+        </div>
+        <div class="tryon-panel">
+          <div class="phone-preview">
+            <div class="model-shape"></div>
+            <div class="garment-shape"></div>
+          </div>
+          <form id="tryonForm">
+            <label>
+              使用者 ID
+              <input name="user_id" value="demo-user-001" required>
+            </label>
+            <label>
+              Avatar ID
+              <input name="avatar_id" value="demo-avatar-001" required>
+            </label>
+            <label>
+              商品 ID
+              <input name="product_id" value="cloth001" required>
+            </label>
+            <button type="submit">立即試穿</button>
+          </form>
+          <pre id="tryonResult">等待試穿任務</pre>
+        </div>
+      </section>
+
+      <section class="dashboard">
+        <article>
+          <h2>後台總覽</h2>
+          <div id="overview" class="metrics"></div>
+        </article>
+
+        <article>
+          <h2>新增商品</h2>
+          <form id="productForm" class="grid-form">
+            <label>
+              名稱
+              <input name="name" value="商務西裝外套" required>
+            </label>
+            <label>
+              品牌
+              <input name="brand" value="BrandA">
+            </label>
+            <label>
+              分類
+              <select name="category">
+                <option value="jacket">外套</option>
+                <option value="top">上衣</option>
+                <option value="pants">長褲</option>
+                <option value="dress">洋裝</option>
+                <option value="shoes">鞋子</option>
+                <option value="accessory">配件</option>
+              </select>
+            </label>
+            <label>
+              顏色
+              <input name="color" value="navy">
+            </label>
+            <label>
+              價格
+              <input name="price" type="number" value="3990">
+            </label>
+            <button type="submit">新增</button>
+          </form>
+          <pre id="productResult">尚未新增商品</pre>
+        </article>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

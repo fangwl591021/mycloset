@@ -1,0 +1,16 @@
+{
+  "name": "my-closet-ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check src/worker.js",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:init": "wrangler d1 execute my-closet-ai-db --file schema.sql",
+    "db:seed": "wrangler d1 execute my-closet-ai-db --file seed.sql"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

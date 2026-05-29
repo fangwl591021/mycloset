@@ -1,0 +1,23 @@
+name = "my-closet-ai"
+main = "src/worker.js"
+compatibility_date = "2026-05-29"
+
+assets = { directory = "public", binding = "ASSETS" }
+
+[[d1_databases]]
+binding = "DB"
+database_name = "my-closet-ai-db"
+database_id = "replace-with-d1-database-id"
+
+[[r2_buckets]]
+binding = "MY_CLOSET_R2"
+bucket_name = "my-closet-ai-assets"
+
+[vars]
+FACE_SIMILARITY_THRESHOLD = "0.80"
+AI_PROVIDER = "stub"
+STORAGE_PROVIDER = "wasabi"
+WASABI_BUCKET = "tonyuse"
+WASABI_REGION = "us-west-1"
+WASABI_ENDPOINT = "https://s3.us-west-1.wasabisys.com"
+WASABI_BASE_PREFIX = "tonyuse/mycloset"
