@@ -24,6 +24,8 @@ wrangler secret put WASABI_ACCESS_KEY_ID
 wrangler secret put WASABI_SECRET_ACCESS_KEY
 ```
 
+Related non-secret Worker vars are listed in `docs/integration-params.md`.
+
 ## Object Key Rules
 
 Use stable prefixes so multiple systems can share the same bucket without mixing data.

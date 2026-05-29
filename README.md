@@ -43,6 +43,10 @@ Tagline:
 
 - `GET /api/health`
 - `GET /api/storage/location`
+- `GET /api/integrations/params`
+- `GET /api/line/webhook`
+- `POST /api/line/webhook`
+- `POST /line/webhook`
 - `GET /api/products`
 - `POST /api/products`
 - `GET /api/avatars/:userId`
@@ -58,9 +62,10 @@ Tagline:
 
 1. Create D1 database and update `wrangler.toml`.
 2. Configure Wasabi secrets with `wrangler secret put WASABI_ACCESS_KEY_ID` and `wrangler secret put WASABI_SECRET_ACCESS_KEY`.
-3. Run `wrangler d1 execute my-closet-ai-db --file schema.sql`.
-4. Optional demo data: `wrangler d1 execute my-closet-ai-db --file seed.sql`.
-5. Deploy with `wrangler deploy`.
+3. Configure LINE secrets with `wrangler secret put LINE_CHANNEL_SECRET` and `wrangler secret put LINE_CHANNEL_ACCESS_TOKEN`.
+4. Run `wrangler d1 execute my-closet-ai-db --file schema.sql`.
+5. Optional demo data: `wrangler d1 execute my-closet-ai-db --file seed.sql`.
+6. Deploy with `wrangler deploy`.
 
 The current AI provider is a stub so the workflow can be tested before choosing OpenAI Image, FASHN API, Genlook Try-On API, another commercial API, or a self-hosted VITON model.
 
@@ -75,3 +80,18 @@ The current AI provider is a stub so the workflow can be tested before choosing 
 - Base prefix: `tonyuse/mycloset/`
 
 Do not commit Wasabi access keys or secret keys. They must be stored as Cloudflare Worker secrets only.
+
+## LINE OA Webhook
+
+Use this callback URL in LINE Developers:
+
+```text
+https://mycloset.fangwl591021.workers.dev/line/webhook
+```
+
+Required secrets:
+
+```bash
+wrangler secret put LINE_CHANNEL_SECRET
+wrangler secret put LINE_CHANNEL_ACCESS_TOKEN
+```

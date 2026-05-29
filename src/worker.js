@@ -32,6 +32,14 @@ export default {
 
     const url = new URL(request.url);
 
+    if (url.pathname === (env.LINE_WEBHOOK_PATH || "/line/webhook")) {
+      try {
+        return await handleLineWebhook(request, env);
+      } catch (error) {
+        return json({ error: error.message || "LINE webhook error" }, 500);
+      }
+    }
+
     if (url.pathname.startsWith("/api/")) {
       try {
         return await routeApi(request, env, url);
@@ -60,6 +68,14 @@ async function routeApi(request, env, url) {
 
   if (method === "GET" && path === "/api/storage/location") {
     return json(getStorageLocation(env));
+  }
+
+  if (method === "GET" && path === "/api/integrations/params") {
+    return json(getIntegrationParams(env));
+  }
+
+  if (path === "/api/line/webhook") {
+    return handleLineWebhook(request, env);
   }
 
   if (method === "GET" && path === "/api/products") {
@@ -375,6 +391,14 @@ function getStorageLocation(env) {
     region: env.WASABI_REGION || "us-west-1",
     endpoint: env.WASABI_ENDPOINT || "https://s3.us-west-1.wasabisys.com",
     base_prefix: basePrefix,
+    allowed_prefix: normalizePrefix(env.WASABI_ALLOWED_PREFIX || basePrefix),
+    force_path_style: env.WASABI_FORCE_PATH_STYLE !== "false",
+    public_url_format: env.WASABI_PUBLIC_URL_FORMAT || "https://tonyuse.s3.us-west-1.wasabisys.com/{object_key}",
+    allowed_extensions: splitCsv(env.WASABI_ALLOWED_EXTENSIONS || "jpg,jpeg,png,webp,pdf,csv,xlsx"),
+    blocked_extensions: splitCsv(env.WASABI_BLOCKED_EXTENSIONS || "php,js,exe,sh,bat,html"),
+    max_image_bytes: Number(env.WASABI_MAX_IMAGE_BYTES || 5242880),
+    max_document_bytes: Number(env.WASABI_MAX_DOCUMENT_BYTES || 20971520),
+    presigned_expires_seconds: Number(env.WASABI_PRESIGNED_EXPIRES_SECONDS || 600),
     folders: {
       products: `${basePrefix}shops/{shop_id}/products/{yyyy}/{mm}/`,
       members: `${basePrefix}shops/{shop_id}/members/{yyyy}/{mm}/`,
@@ -385,6 +409,132 @@ function getStorageLocation(env) {
       temp: `${basePrefix}shops/{shop_id}/temp/{yyyy}/{mm}/`
     }
   };
+}
+
+function getIntegrationParams(env) {
+  return {
+    public_base_url: env.PUBLIC_BASE_URL || "https://mycloset.fangwl591021.workers.dev",
+    storage: getStorageLocation(env),
+    line: {
+      webhook_path: env.LINE_WEBHOOK_PATH || "/line/webhook",
+      webhook_url: env.LINE_WEBHOOK_URL || `${env.PUBLIC_BASE_URL || "https://mycloset.fangwl591021.workers.dev"}/line/webhook`,
+      liff_url: env.LINE_LIFF_URL || env.PUBLIC_BASE_URL || "https://mycloset.fangwl591021.workers.dev/",
+      reply_enabled: env.LINE_REPLY_ENABLED !== "false",
+      secrets_required: [
+        "LINE_CHANNEL_SECRET",
+        "LINE_CHANNEL_ACCESS_TOKEN"
+      ]
+    },
+    secrets_required: [
+      "WASABI_ACCESS_KEY_ID",
+      "WASABI_SECRET_ACCESS_KEY",
+      "LINE_CHANNEL_SECRET",
+      "LINE_CHANNEL_ACCESS_TOKEN"
+    ]
+  };
+}
+
+async function handleLineWebhook(request, env) {
+  if (request.method === "GET") {
+    return json({
+      ok: true,
+      webhook_url: env.LINE_WEBHOOK_URL || `${env.PUBLIC_BASE_URL || "https://mycloset.fangwl591021.workers.dev"}/line/webhook`,
+      signature_verification: Boolean(env.LINE_CHANNEL_SECRET),
+      reply_enabled: env.LINE_REPLY_ENABLED !== "false"
+    });
+  }
+
+  if (request.method !== "POST") {
+    return json({ error: "Method not allowed" }, 405);
+  }
+
+  const rawBody = await request.text();
+  if (env.LINE_CHANNEL_SECRET) {
+    const valid = await verifyLineSignature(rawBody, request.headers.get("x-line-signature"), env.LINE_CHANNEL_SECRET);
+    if (!valid) {
+      return json({ error: "Invalid LINE signature" }, 401);
+    }
+  }
+
+  const payload = JSON.parse(rawBody || "{}");
+  const events = Array.isArray(payload.events) ? payload.events : [];
+
+  for (const event of events) {
+    await recordLineEvent(env, event);
+    if (shouldReplyLineEvent(env, event)) {
+      await replyLineMessage(env, event.replyToken, buildLineReplyText(env, event));
+    }
+  }
+
+  return json({ ok: true, received: events.length });
+}
+
+async function verifyLineSignature(rawBody, signature, channelSecret) {
+  if (!signature) return false;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(channelSecret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const digest = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(rawBody));
+  const expected = bytesToBase64(new Uint8Array(digest));
+  return timingSafeEqual(expected, signature);
+}
+
+async function recordLineEvent(env, event) {
+  if (!env.DB) return;
+  await env.DB.prepare(
+    `INSERT INTO line_webhook_events (id, line_event_type, line_user_id, reply_token, payload_json)
+     VALUES (?, ?, ?, ?, ?)`
+  )
+    .bind(
+      crypto.randomUUID(),
+      event.type || "unknown",
+      event.source?.userId || null,
+      event.replyToken || null,
+      JSON.stringify(event)
+    )
+    .run();
+}
+
+function shouldReplyLineEvent(env, event) {
+  return env.LINE_REPLY_ENABLED !== "false" && Boolean(env.LINE_CHANNEL_ACCESS_TOKEN) && Boolean(event.replyToken);
+}
+
+function buildLineReplyText(env, event) {
+  const liffUrl = env.LINE_LIFF_URL || env.PUBLIC_BASE_URL || "https://mycloset.fangwl591021.workers.dev/";
+  if (event.type === "follow") {
+    return `${env.LINE_WELCOME_TEXT || "歡迎使用 My Closet AI。"}\n${liffUrl}`;
+  }
+  if (event.type === "message" && event.message?.type === "text") {
+    return `My Closet AI 真人虛擬試穿入口：\n${liffUrl}`;
+  }
+  return `My Closet AI：\n${liffUrl}`;
+}
+
+async function replyLineMessage(env, replyToken, text) {
+  const response = await fetch("https://api.line.me/v2/bot/message/reply", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${env.LINE_CHANNEL_ACCESS_TOKEN}`
+    },
+    body: JSON.stringify({
+      replyToken,
+      messages: [
+        {
+          type: "text",
+          text
+        }
+      ]
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`LINE reply failed: ${response.status}`);
+  }
 }
 
 async function addPoints(env, userId, sourceType, sourceId, points, reason) {
@@ -418,6 +568,27 @@ function numberOrNull(value) {
 
 function normalizePrefix(prefix) {
   return prefix.replace(/^\/+/, "").replace(/\/?$/, "/");
+}
+
+function splitCsv(value) {
+  return value.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function bytesToBase64(bytes) {
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary);
+}
+
+function timingSafeEqual(a, b) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let index = 0; index < a.length; index += 1) {
+    diff |= a.charCodeAt(index) ^ b.charCodeAt(index);
+  }
+  return diff === 0;
 }
 
 function json(payload, status = 200) {

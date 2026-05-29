@@ -118,7 +118,17 @@ CREATE TABLE IF NOT EXISTS usage_counters (
   UNIQUE (merchant_id, period)
 );
 
+CREATE TABLE IF NOT EXISTS line_webhook_events (
+  id TEXT PRIMARY KEY,
+  line_event_type TEXT NOT NULL,
+  line_user_id TEXT,
+  reply_token TEXT,
+  payload_json TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
 CREATE INDEX IF NOT EXISTS idx_tryon_jobs_user ON tryon_jobs(user_id);
 CREATE INDEX IF NOT EXISTS idx_outfits_review_status ON outfits(review_status);
 CREATE INDEX IF NOT EXISTS idx_social_actions_target ON social_actions(target_type, target_id);
+CREATE INDEX IF NOT EXISTS idx_line_webhook_events_user ON line_webhook_events(line_user_id);
