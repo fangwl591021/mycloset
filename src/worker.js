@@ -61,6 +61,12 @@ async function routeApi(request, env, url) {
       ok: true,
       service: "my-closet-ai",
       provider: env.AI_PROVIDER || "stub",
+      openai: {
+        base_url: env.OPENAI_BASE_URL || "https://api.openai.com/v1",
+        text_model: env.OPENAI_TEXT_MODEL || "gpt-5-mini",
+        image_model: env.OPENAI_IMAGE_MODEL || "gpt-image-1.5",
+        api_key_configured: Boolean(env.OPENAI_API_KEY)
+      },
       storage_provider: env.STORAGE_PROVIDER || "wasabi",
       face_similarity_threshold: Number(env.FACE_SIMILARITY_THRESHOLD || 0.8)
     });
@@ -414,6 +420,18 @@ function getStorageLocation(env) {
 function getIntegrationParams(env) {
   return {
     public_base_url: env.PUBLIC_BASE_URL || "https://mycloset.fangwl591021.workers.dev",
+    openai: {
+      base_url: env.OPENAI_BASE_URL || "https://api.openai.com/v1",
+      text_model: env.OPENAI_TEXT_MODEL || "gpt-5-mini",
+      image_model: env.OPENAI_IMAGE_MODEL || "gpt-image-1.5",
+      api_key_secret: "OPENAI_API_KEY",
+      intended_uses: [
+        "AI outfit advisor",
+        "AI stylist text recommendations",
+        "product copy and style tags",
+        "future image workflow adapter"
+      ]
+    },
     storage: getStorageLocation(env),
     line: {
       webhook_path: env.LINE_WEBHOOK_PATH || "/line/webhook",
@@ -429,7 +447,8 @@ function getIntegrationParams(env) {
       "WASABI_ACCESS_KEY_ID",
       "WASABI_SECRET_ACCESS_KEY",
       "LINE_CHANNEL_SECRET",
-      "LINE_CHANNEL_ACCESS_TOKEN"
+      "LINE_CHANNEL_ACCESS_TOKEN",
+      "OPENAI_API_KEY"
     ]
   };
 }

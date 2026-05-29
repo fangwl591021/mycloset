@@ -8,6 +8,9 @@ All non-secret integration settings are stored in `wrangler.toml` under `[vars]`
 | --- | --- | --- |
 | Public base URL | `PUBLIC_BASE_URL` | `https://mycloset.fangwl591021.workers.dev` |
 | AI provider | `AI_PROVIDER` | `stub` |
+| OpenAI base URL | `OPENAI_BASE_URL` | `https://api.openai.com/v1` |
+| GPT text model | `OPENAI_TEXT_MODEL` | `gpt-5-mini` |
+| OpenAI image model | `OPENAI_IMAGE_MODEL` | `gpt-image-1.5` |
 | Face similarity threshold | `FACE_SIMILARITY_THRESHOLD` | `0.80` |
 | Storage provider | `STORAGE_PROVIDER` | `wasabi` |
 | Wasabi bucket | `WASABI_BUCKET` | `tonyuse` |
@@ -36,6 +39,17 @@ All non-secret integration settings are stored in `wrangler.toml` under `[vars]`
 | Wasabi secret key | `WASABI_SECRET_ACCESS_KEY` | `wrangler secret put WASABI_SECRET_ACCESS_KEY` |
 | LINE channel secret | `LINE_CHANNEL_SECRET` | `wrangler secret put LINE_CHANNEL_SECRET` |
 | LINE channel access token | `LINE_CHANNEL_ACCESS_TOKEN` | `wrangler secret put LINE_CHANNEL_ACCESS_TOKEN` |
+| OpenAI API key | `OPENAI_API_KEY` | `wrangler secret put OPENAI_API_KEY` |
+
+## Missing Secret Setup Commands
+
+Run these locally before deployment:
+
+```bash
+wrangler secret put LINE_CHANNEL_SECRET
+wrangler secret put LINE_CHANNEL_ACCESS_TOKEN
+wrangler secret put OPENAI_API_KEY
+```
 
 ## LINE OA Webhook
 
