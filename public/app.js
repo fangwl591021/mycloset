@@ -152,11 +152,10 @@ async function submitProduct(event) {
     productResult.textContent = "新增中...";
     const payload = Object.fromEntries(new FormData(productForm).entries());
     payload.price = Number(payload.price || 0);
-    const endpoint = payload.source_url ? "/api/products/import-url" : "/api/products";
     Object.keys(payload).forEach((key) => {
       if (payload[key] === "") delete payload[key];
     });
-    const data = await api(endpoint, {
+    const data = await api("/api/products", {
       ...adminOptions(),
       method: "POST",
       body: JSON.stringify(payload)
@@ -172,6 +171,7 @@ async function submitProduct(event) {
 async function submitExternalProduct(event) {
   event.preventDefault();
   try {
+    externalProductResult.className = "import-result";
     externalProductResult.textContent = "匯入中...";
     const payload = Object.fromEntries(new FormData(externalProductForm).entries());
     payload.price = Number(payload.price || 0);
@@ -183,13 +183,18 @@ async function submitExternalProduct(event) {
       method: "POST",
       body: JSON.stringify(payload)
     });
-    externalProductResult.textContent = JSON.stringify(data, null, 2);
+    externalProductResult.innerHTML = renderImportResult(data);
+    externalProductResult.querySelector("[data-use-product]")?.addEventListener("click", (clickEvent) => {
+      tryonForm.elements.product_id.value = clickEvent.currentTarget.dataset.useProduct;
+      tryonResult.textContent = `已帶入商品 ${clickEvent.currentTarget.dataset.useProduct}`;
+    });
     if (data.id) {
       tryonForm.elements.product_id.value = data.id;
     }
     await loadProducts();
     await loadOverview();
   } catch (error) {
+    externalProductResult.className = "import-result import-result-error";
     externalProductResult.textContent = error.message;
   }
 }
@@ -457,6 +462,33 @@ function renderProduct(product) {
       </div>
       <button type="button" data-use-product="${escapeHtml(product.id)}">帶入試穿</button>
     </article>
+  `;
+}
+
+function renderImportResult(data) {
+  const product = data.product || {};
+  const imageHtml = product.image_url
+    ? `<img src="${escapeHtml(product.image_url)}" alt="${escapeHtml(product.name || "imported product")}" loading="lazy">`
+    : `<div class="missing-image">未抓到商品圖片<br>請補「圖片網址」再匯入一次</div>`;
+  const sourceUrl = product.source_url
+    ? `<a href="${escapeHtml(product.source_url)}" target="_blank" rel="noopener">查看原商品</a>`
+    : "";
+  const note = product.import_note
+    ? `<p class="import-warning">${escapeHtml(product.import_note)}</p>`
+    : "";
+  return `
+    <div class="import-summary">
+      <div class="import-image">${imageHtml}</div>
+      <div>
+        <strong>已匯入：${escapeHtml(product.name || data.id || "商品")}</strong>
+        <span>商品 ID：${escapeHtml(data.id || product.id || "")}</span>
+        <span>來源：${escapeHtml(product.source || "external")} / ${escapeHtml(product.import_status || data.status || "imported")}</span>
+        <span>分類：${escapeHtml(product.category || "")}　價格：NT$${Number(product.price || 0).toLocaleString("zh-TW")}</span>
+        ${sourceUrl}
+        ${note}
+        <button type="button" data-use-product="${escapeHtml(data.id || product.id || "")}">帶入試穿</button>
+      </div>
+    </div>
   `;
 }
 
