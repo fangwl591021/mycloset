@@ -141,6 +141,10 @@ async function routeApi(request, env, url) {
     return createTryon(request, env);
   }
 
+  if (method === "POST" && path === "/api/stylist") {
+    return createStylistAdvice(request, env);
+  }
+
   const tryonMatch = path.match(/^\/api\/tryons\/([^/]+)$/);
   if (method === "GET" && tryonMatch) {
     return getTryon(env, tryonMatch[1]);
@@ -306,6 +310,93 @@ async function createTryon(request, env) {
     storage_mode: "wasabi-document"
   }, 201);
 }
+
+async function createStylistAdvice(request, env) {
+  const body = await readJson(request);
+  requireFields(body, ["user_id", "occasion"]);
+  if (!env.OPENAI_API_KEY) {
+    return json({ error: "OPENAI_API_KEY is not configured" }, 500);
+  }
+
+  const [avatarResult, productResult] = await Promise.all([
+    getAvatarRecord(env, body.user_id),
+    body.product_id ? findDocumentById(env, "products", body.product_id) : Promise.resolve(null)
+  ]);
+  const advice = await callOpenAIStylist(env, {
+    userId: body.user_id,
+    occasion: body.occasion,
+    preference: body.preference || "",
+    avatar: avatarResult,
+    product: productResult
+  });
+  const id = crypto.randomUUID();
+  const record = {
+    id,
+    user_id: body.user_id,
+    product_id: body.product_id || null,
+    occasion: body.occasion,
+    preference: body.preference || null,
+    advice,
+    model: env.OPENAI_TEXT_MODEL || "gpt-5-mini",
+    storage_key: buildDocumentKey(env, body.user_id, "stylist", `${id}.json`),
+    created_at: new Date().toISOString()
+  };
+  await putJsonDocument(env, record.storage_key, record);
+  return json({ id, advice, record, storage_mode: "wasabi-document" }, 201);
+}
+
+async function getAvatarRecord(env, userId) {
+  const avatarDocuments = await listDocumentsForOwnerCategory(env, userId, "members");
+  return avatarDocuments[0] || [...store.avatars.values()].find((item) => item.user_id === userId) || null;
+}
+
+async function callOpenAIStylist(env, context) {
+  const prompt = [
+    "你是 My Closet AI 的穿搭顧問。請用繁體中文回答。",
+    "請根據使用者 Avatar、商品與場合，提供可執行的短版穿搭建議。",
+    "回答必須完整，不超過 450 個中文字。",
+    "回答格式固定為四段：整體建議、適合原因、搭配建議、注意事項。",
+    "每段 1 到 2 句，不要列超過 6 個項目。",
+    "不要聲稱已經真的生成換衣圖片。",
+    "",
+    `使用者 ID: ${context.userId}`,
+    `場合: ${context.occasion}`,
+    `偏好: ${context.preference || "未指定"}`,
+    `Avatar: ${JSON.stringify(context.avatar || {})}`,
+    `商品: ${JSON.stringify(context.product || {})}`
+  ].join("\n");
+  const response = await fetch(`${env.OPENAI_BASE_URL || "https://api.openai.com/v1"}/responses`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${env.OPENAI_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: env.OPENAI_TEXT_MODEL || "gpt-5-mini",
+      input: prompt,
+      max_output_tokens: 1400
+    })
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error?.message || `OpenAI request failed: ${response.status}`);
+  }
+  return extractOpenAIText(data);
+}
+
+function extractOpenAIText(data) {
+  if (data.output_text) return data.output_text;
+  const chunks = [];
+  for (const item of data.output || []) {
+    for (const content of item.content || []) {
+      if (content.type === "output_text" && content.text) {
+        chunks.push(content.text);
+      }
+    }
+  }
+  return chunks.join("\n").trim() || JSON.stringify(data);
+}
+
 
 async function getTryon(env, id) {
   const tryon = store.tryons.get(id) || await findDocumentById(env, "tryons", id);

@@ -125,6 +125,37 @@
         </article>
       </section>
 
+      <section class="stylist">
+        <article>
+          <h2>AI 穿搭顧問</h2>
+          <form id="stylistForm" class="grid-form">
+            <label>
+              使用者 ID
+              <input name="user_id" value="demo-user-001" required>
+            </label>
+            <label>
+              商品 ID
+              <input name="product_id" value="cloth001">
+            </label>
+            <label>
+              場合
+              <select name="occasion">
+                <option value="商務會議">商務會議</option>
+                <option value="約會">約會</option>
+                <option value="直播導購">直播導購</option>
+                <option value="日常休閒">日常休閒</option>
+              </select>
+            </label>
+            <label>
+              偏好
+              <input name="preference" value="俐落、顯瘦、好活動">
+            </label>
+            <button type="submit">產生建議</button>
+          </form>
+          <pre id="stylistResult">等待產生穿搭建議</pre>
+        </article>
+      </section>
+
       <section class="catalog">
         <div class="section-head">
           <h2>商品清單</h2>

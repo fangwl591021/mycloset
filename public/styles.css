@@ -118,7 +118,8 @@ main {
 
 .tryon-panel,
 .dashboard article,
-.workflow article {
+.workflow article,
+.stylist article {
   background: #ffffff;
   border: 1px solid #ddd8cf;
   border-radius: 8px;
@@ -192,6 +193,10 @@ pre {
   display: grid;
   gap: 24px;
   grid-template-columns: 1fr 1fr;
+  margin-top: 28px;
+}
+
+.stylist {
   margin-top: 28px;
 }
 

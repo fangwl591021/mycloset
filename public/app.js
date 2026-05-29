@@ -16,6 +16,8 @@ const avatarResult = document.querySelector("#avatarResult");
 const refreshPointsButton = document.querySelector("#refreshPoints");
 const refreshEligibilityButton = document.querySelector("#refreshEligibility");
 const memberResult = document.querySelector("#memberResult");
+const stylistForm = document.querySelector("#stylistForm");
+const stylistResult = document.querySelector("#stylistResult");
 const outfitListEl = document.querySelector("#outfitList");
 const outfitFilter = document.querySelector("#outfitFilter");
 const refreshOutfitsButton = document.querySelector("#refreshOutfits");
@@ -39,6 +41,7 @@ outfitForm.addEventListener("submit", submitOutfit);
 avatarForm.addEventListener("submit", submitAvatar);
 refreshPointsButton.addEventListener("click", loadPoints);
 refreshEligibilityButton.addEventListener("click", loadEligibility);
+stylistForm.addEventListener("submit", submitStylist);
 refreshOutfitsButton.addEventListener("click", loadOutfits);
 outfitFilter.addEventListener("change", loadOutfits);
 
@@ -144,6 +147,21 @@ async function submitAvatar(event) {
     await loadOverview();
   } catch (error) {
     avatarResult.textContent = error.message;
+  }
+}
+
+async function submitStylist(event) {
+  event.preventDefault();
+  try {
+    stylistResult.textContent = "AI 顧問產生中...";
+    const payload = Object.fromEntries(new FormData(stylistForm).entries());
+    const data = await api("/api/stylist", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    stylistResult.textContent = data.advice || JSON.stringify(data, null, 2);
+  } catch (error) {
+    stylistResult.textContent = error.message;
   }
 }
 
