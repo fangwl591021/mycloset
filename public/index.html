@@ -247,6 +247,10 @@
           <h2>新增商品</h2>
           <form id="productForm" class="grid-form">
             <label>
+              外部商品網址（測試）
+              <input name="source_url" placeholder="Amazon / 淘寶 / 任意商品頁網址">
+            </label>
+            <label>
               名稱
               <input name="name" value="商務西裝外套" required>
             </label>
@@ -272,6 +276,10 @@
             <label>
               價格
               <input name="price" type="number" value="3990">
+            </label>
+            <label>
+              商品圖片網址
+              <input name="image_url" placeholder="抓不到圖片時可手動貼上">
             </label>
             <button type="submit">新增</button>
           </form>

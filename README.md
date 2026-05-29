@@ -50,6 +50,7 @@ Tagline:
 - `POST /line/webhook`
 - `GET /api/products`
 - `POST /api/products`
+- `POST /api/products/import-url`
 - `GET /api/avatars/:userId`
 - `POST /api/avatars`
 - `POST /api/tryons`

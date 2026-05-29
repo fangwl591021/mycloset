@@ -71,6 +71,10 @@ GET https://mycloset.fangwl591021.workers.dev/api/line/webhook
 
 The webhook verifies `x-line-signature` when `LINE_CHANNEL_SECRET` is configured. If `LINE_REPLY_ENABLED=true` and `LINE_CHANNEL_ACCESS_TOKEN` is configured, the Worker replies to message/follow events with the configured LIFF URL.
 
+## Test External Product Import
+
+For MVP testing, merchants can paste an Amazon, Taobao, Tmall, or other product page URL into the product form. The Worker calls `POST /api/products/import-url`, tries to read Open Graph title/image/price metadata, and stores the result as a normal product JSON document. If the marketplace blocks metadata fetching, manually fill `name`, `image_url`, `category`, and `price`; the product is still usable for the try-on flow.
+
 ## LINE Login / LIFF Settings
 
 Create one LIFF app in the same LINE Login channel and use these values:

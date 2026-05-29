@@ -149,7 +149,11 @@ async function submitProduct(event) {
     productResult.textContent = "新增中...";
     const payload = Object.fromEntries(new FormData(productForm).entries());
     payload.price = Number(payload.price || 0);
-    const data = await api("/api/products", {
+    const endpoint = payload.source_url ? "/api/products/import-url" : "/api/products";
+    Object.keys(payload).forEach((key) => {
+      if (payload[key] === "") delete payload[key];
+    });
+    const data = await api(endpoint, {
       ...adminOptions(),
       method: "POST",
       body: JSON.stringify(payload)
@@ -416,6 +420,7 @@ function renderProduct(product) {
     <article class="product-item">
       <div>
         <strong>${escapeHtml(product.name || product.id)}</strong>
+        ${product.source_url ? `<span>${escapeHtml(product.source || "external")} · ${escapeHtml(product.import_status || "imported")}</span>` : ""}
         <span>${escapeHtml(product.brand || "未填品牌")} · ${escapeHtml(product.category || "uncategorized")}</span>
       </div>
       <div class="product-meta">

@@ -152,6 +152,11 @@ async function routeApi(request, env, url) {
     return createProduct(request, env);
   }
 
+  if (method === "POST" && path === "/api/products/import-url") {
+    requireAdmin(request, env);
+    return importExternalProduct(request, env);
+  }
+
   if (method === "POST" && path === "/api/avatars") {
     return upsertAvatar(request, env);
   }
@@ -240,6 +245,8 @@ async function createProduct(request, env) {
     color: body.color || null,
     price: Number(body.price || 0),
     image_url: body.image_url || null,
+    source: body.source || "manual",
+    source_url: body.source_url || null,
     status: body.status || "active",
     tryon_count: 0,
     collection_count: 0,
@@ -251,6 +258,44 @@ async function createProduct(request, env) {
   await putJsonDocument(env, product.storage_key, product);
 
   return json({ id, status: "created", product, storage_mode: "wasabi-document" }, 201);
+}
+
+async function importExternalProduct(request, env) {
+  const body = await readJson(request);
+  requireFields(body, ["source_url", "category"]);
+  if (!CATEGORY_LABELS.has(body.category)) {
+    return json({ error: "Unsupported category" }, 400);
+  }
+
+  const sourceUrl = normalizeHttpUrl(body.source_url);
+  const imported = await fetchProductPageMetadata(sourceUrl).catch((error) => ({
+    error: error.message
+  }));
+  const id = body.id || crypto.randomUUID();
+  const product = {
+    id,
+    merchant_id: body.merchant_id || "test-import",
+    name: body.name || imported.title || sourceUrl.hostname,
+    brand: body.brand || imported.site_name || detectProductSource(sourceUrl.hostname),
+    category: body.category,
+    color: body.color || null,
+    price: Number(body.price || imported.price || 0),
+    image_url: body.image_url || imported.image_url || null,
+    source: detectProductSource(sourceUrl.hostname),
+    source_url: sourceUrl.toString(),
+    import_status: imported.error ? "metadata_fallback" : "metadata_imported",
+    import_note: imported.error || null,
+    status: body.status || "active",
+    tryon_count: 0,
+    collection_count: 0,
+    conversion_count: 0,
+    storage_key: buildDocumentKey(env, body.merchant_id || "test-import", "products", `${id}.json`),
+    created_at: new Date().toISOString()
+  };
+  store.products.set(id, product);
+  await putJsonDocument(env, product.storage_key, product);
+
+  return json({ id, status: "imported", product, imported_metadata: imported, storage_mode: "wasabi-document" }, 201);
 }
 
 async function createStoragePresignedUrl(request, env) {
@@ -1152,6 +1197,108 @@ function decodeXml(value) {
     .replaceAll("&amp;", "&")
     .replaceAll("&quot;", "\"")
     .replaceAll("&apos;", "'");
+}
+
+function normalizeHttpUrl(value) {
+  let url;
+  try {
+    url = new URL(String(value));
+  } catch {
+    const error = new Error("source_url must be a valid URL");
+    error.status = 400;
+    throw error;
+  }
+  if (!["http:", "https:"].includes(url.protocol)) {
+    const error = new Error("source_url must start with http or https");
+    error.status = 400;
+    throw error;
+  }
+  return url;
+}
+
+async function fetchProductPageMetadata(url) {
+  const response = await fetch(url.toString(), {
+    headers: {
+      "accept": "text/html,application/xhtml+xml",
+      "user-agent": "MyClosetAI-TestImporter/1.0"
+    }
+  });
+  if (!response.ok) {
+    throw new Error(`metadata fetch failed: ${response.status}`);
+  }
+  const html = (await response.text()).slice(0, 250000);
+  return {
+    title: firstNonEmpty(
+      getMetaContent(html, "property", "og:title"),
+      getMetaContent(html, "name", "twitter:title"),
+      getTitleTag(html)
+    ),
+    site_name: firstNonEmpty(getMetaContent(html, "property", "og:site_name"), url.hostname),
+    image_url: normalizeMaybeRelativeUrl(
+      firstNonEmpty(
+        getMetaContent(html, "property", "og:image"),
+        getMetaContent(html, "name", "twitter:image")
+      ),
+      url
+    ),
+    price: parsePrice(firstNonEmpty(
+      getMetaContent(html, "property", "product:price:amount"),
+      getMetaContent(html, "name", "price"),
+      getMetaContent(html, "itemprop", "price")
+    ))
+  };
+}
+
+function getMetaContent(html, attributeName, attributeValue) {
+  const escapedValue = escapeRegex(attributeValue);
+  const patternA = new RegExp(`<meta\\b(?=[^>]*\\b${attributeName}=["']${escapedValue}["'])(?=[^>]*\\bcontent=["']([^"']+)["'])[^>]*>`, "i");
+  const patternB = new RegExp(`<meta\\b(?=[^>]*\\bcontent=["']([^"']+)["'])(?=[^>]*\\b${attributeName}=["']${escapedValue}["'])[^>]*>`, "i");
+  const match = html.match(patternA) || html.match(patternB);
+  return match ? decodeHtmlEntities(match[1].trim()) : "";
+}
+
+function getTitleTag(html) {
+  const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  return match ? decodeHtmlEntities(match[1].replace(/\s+/g, " ").trim()) : "";
+}
+
+function normalizeMaybeRelativeUrl(value, baseUrl) {
+  if (!value) return null;
+  try {
+    return new URL(value, baseUrl).toString();
+  } catch {
+    return value;
+  }
+}
+
+function detectProductSource(hostname) {
+  const host = hostname.toLowerCase();
+  if (host.includes("amazon.")) return "amazon";
+  if (host.includes("taobao.") || host.includes("tmall.")) return "taobao";
+  return "external";
+}
+
+function parsePrice(value) {
+  if (!value) return 0;
+  const match = String(value).replace(/,/g, "").match(/\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : 0;
+}
+
+function firstNonEmpty(...values) {
+  return values.find((value) => value !== undefined && value !== null && String(value).trim() !== "") || "";
+}
+
+function decodeHtmlEntities(value) {
+  return String(value)
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function bytesToBase64(bytes) {
