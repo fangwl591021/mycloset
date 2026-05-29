@@ -18,6 +18,7 @@ const outfitForm = document.querySelector("#outfitForm");
 const outfitResult = document.querySelector("#outfitResult");
 const avatarForm = document.querySelector("#avatarForm");
 const avatarResult = document.querySelector("#avatarResult");
+const avatarPhotoPreview = document.querySelector("#avatarPhotoPreview");
 const refreshPointsButton = document.querySelector("#refreshPoints");
 const refreshEligibilityButton = document.querySelector("#refreshEligibility");
 const memberResult = document.querySelector("#memberResult");
@@ -31,6 +32,13 @@ const refreshOutfitsButton = document.querySelector("#refreshOutfits");
 const ADMIN_TOKEN_KEY = "mycloset_admin_token";
 let lastTryon = null;
 let loginConfig = null;
+const avatarPhotoFields = [
+  ["photo_front", "Front"],
+  ["photo_left_45", "Left 45"],
+  ["photo_right_45", "Right 45"],
+  ["photo_full_body", "Full body"]
+];
+const avatarPhotoPreviewUrls = new Map();
 
 const metricLabels = {
   products: "商品",
@@ -50,6 +58,9 @@ refreshProductsButton.addEventListener("click", loadProducts);
 tryonForm.addEventListener("submit", submitTryon);
 outfitForm.addEventListener("submit", submitOutfit);
 avatarForm.addEventListener("submit", submitAvatar);
+avatarPhotoFields.forEach(([fieldName]) => {
+  avatarForm.elements[fieldName]?.addEventListener("change", renderAvatarPhotoPreview);
+});
 refreshPointsButton.addEventListener("click", loadPoints);
 refreshEligibilityButton.addEventListener("click", loadEligibility);
 stylistForm.addEventListener("submit", submitStylist);
@@ -62,6 +73,7 @@ initLogin();
 loadProducts();
 loadOutfits();
 loadOverview();
+renderAvatarPhotoPreview();
 
 async function initLogin() {
   try {
@@ -126,6 +138,33 @@ function setMemberId(memberId) {
   ].forEach((input) => {
     if (input) input.value = memberId;
   });
+}
+
+function renderAvatarPhotoPreview() {
+  const cards = avatarPhotoFields.map(([fieldName, label]) => {
+    const file = avatarForm.elements[fieldName]?.files?.[0];
+    if (!file) {
+      return `
+        <div class="avatar-photo-card avatar-photo-empty">
+          <span>${escapeHtml(label)}</span>
+          <strong>No file</strong>
+        </div>
+      `;
+    }
+    if (avatarPhotoPreviewUrls.has(fieldName)) {
+      URL.revokeObjectURL(avatarPhotoPreviewUrls.get(fieldName));
+    }
+    const previewUrl = URL.createObjectURL(file);
+    avatarPhotoPreviewUrls.set(fieldName, previewUrl);
+    return `
+      <div class="avatar-photo-card">
+        <img src="${previewUrl}" alt="${escapeHtml(label)} preview">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(file.name)}</strong>
+      </div>
+    `;
+  });
+  avatarPhotoPreview.innerHTML = cards.join("");
 }
 
 async function loadOverview() {
@@ -512,19 +551,27 @@ function renderImportResult(data) {
 
 function renderAvatarResult(data, payload) {
   const avatar = data.avatar || {};
-  const photos = [
-    avatar.photo_front_key || payload.photo_front_key,
-    avatar.photo_left_45_key || payload.photo_left_45_key,
-    avatar.photo_right_45_key || payload.photo_right_45_key,
-    avatar.photo_full_body_key || payload.photo_full_body_key
-  ].filter(Boolean);
+  const photos = avatarPhotoFields.map(([fieldName, label]) => ({
+    label,
+    previewUrl: avatarPhotoPreviewUrls.get(fieldName) || "",
+    key: avatar[`${fieldName}_key`] || payload[`${fieldName}_key`] || ""
+  }));
+  const uploadedCount = photos.filter((photo) => photo.key).length;
+  const photoHtml = photos.map((photo) => `
+    <div class="avatar-photo-card">
+      ${photo.previewUrl ? `<img src="${photo.previewUrl}" alt="${escapeHtml(photo.label)}">` : ""}
+      <span>${escapeHtml(photo.label)}</span>
+      <strong>${photo.key ? "Uploaded" : "Missing"}</strong>
+    </div>
+  `).join("");
   return `
     <div class="result-summary">
       <strong>Avatar 建立成功</strong>
       <span>Avatar ID：${escapeHtml(data.id || avatar.id || "")}</span>
       <span>使用者 ID：${escapeHtml(payload.user_id || avatar.user_id || "")}</span>
-      <span>照片已上傳：${photos.length} / 4</span>
+      <span>照片已上傳：${uploadedCount} / 4</span>
       <span>狀態：${escapeHtml(avatar.status || payload.status || "ready")}</span>
+      <div class="avatar-photo-grid avatar-photo-result">${photoHtml}</div>
       <button type="button" data-avatar-id="${escapeHtml(data.id || avatar.id || "")}">帶入試穿</button>
     </div>
   `;

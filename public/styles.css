@@ -422,6 +422,61 @@ h2 {
   color: #8f1d16;
 }
 
+.avatar-photo-grid {
+  display: grid;
+  gap: 12px;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 4px 0 12px;
+}
+
+.avatar-photo-result {
+  margin-top: 14px;
+}
+
+.avatar-photo-card {
+  background: #ffffff;
+  border: 1px solid #d9e2dc;
+  border-radius: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.avatar-photo-card img {
+  aspect-ratio: 3 / 4;
+  display: block;
+  object-fit: cover;
+  width: 100%;
+}
+
+.avatar-photo-card span,
+.avatar-photo-card strong {
+  display: block;
+  overflow: hidden;
+  padding: 0 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.avatar-photo-card span {
+  color: #69706d;
+  font-size: 13px;
+  padding-top: 8px;
+}
+
+.avatar-photo-card strong {
+  color: #1f3d36;
+  font-size: 13px;
+  padding-bottom: 10px;
+}
+
+.avatar-photo-empty {
+  align-content: center;
+  aspect-ratio: 3 / 4;
+  background: #f7f5ef;
+  display: grid;
+}
+
 .result-summary strong,
 .result-summary span {
   display: block;
@@ -528,7 +583,8 @@ button:disabled {
   .section-head,
   .product-item,
   .outfit-item,
-  .import-summary {
+  .import-summary,
+  .avatar-photo-grid {
     align-items: stretch;
     grid-template-columns: 1fr;
   }
