@@ -246,8 +246,13 @@ async function submitOutfit(event) {
 
 async function submitAvatar(event) {
   event.preventDefault();
+  const submitButton = avatarForm.querySelector("button[type='submit']");
   try {
-    avatarResult.textContent = "照片上傳中...";
+    setFormResult(avatarResult, "pending", "照片上傳中，請不要關閉頁面...");
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.textContent = "上傳中...";
+    }
     const formData = new FormData(avatarForm);
     const payload = Object.fromEntries(formData.entries());
     const userId = payload.user_id;
@@ -257,17 +262,30 @@ async function submitAvatar(event) {
     delete payload.photo_left_45;
     delete payload.photo_right_45;
     delete payload.photo_full_body;
-    avatarResult.textContent = "照片已上傳，Avatar 建檔中...";
+    setFormResult(avatarResult, "pending", "照片已上傳，Avatar 建檔中...");
+    if (submitButton) submitButton.textContent = "建檔中...";
     const data = await api("/api/avatars", {
       method: "POST",
       body: JSON.stringify(payload)
     });
-    avatarResult.textContent = JSON.stringify(data, null, 2);
     tryonForm.elements.user_id.value = payload.user_id;
     tryonForm.elements.avatar_id.value = data.id;
+    avatarResult.innerHTML = renderAvatarResult(data, payload);
+    avatarResult.className = "form-result form-result-ok";
+    avatarResult.querySelector("[data-avatar-id]")?.addEventListener("click", (clickEvent) => {
+      tryonForm.elements.user_id.value = payload.user_id;
+      tryonForm.elements.avatar_id.value = clickEvent.currentTarget.dataset.avatarId;
+      tryonResult.textContent = `已帶入 Avatar ${clickEvent.currentTarget.dataset.avatarId}`;
+    });
     await loadOverview();
   } catch (error) {
+    avatarResult.className = "form-result form-result-error";
     avatarResult.textContent = error.message;
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = "儲存 Avatar";
+    }
   }
 }
 
@@ -490,6 +508,31 @@ function renderImportResult(data) {
       </div>
     </div>
   `;
+}
+
+function renderAvatarResult(data, payload) {
+  const avatar = data.avatar || {};
+  const photos = [
+    avatar.photo_front_key || payload.photo_front_key,
+    avatar.photo_left_45_key || payload.photo_left_45_key,
+    avatar.photo_right_45_key || payload.photo_right_45_key,
+    avatar.photo_full_body_key || payload.photo_full_body_key
+  ].filter(Boolean);
+  return `
+    <div class="result-summary">
+      <strong>Avatar 建立成功</strong>
+      <span>Avatar ID：${escapeHtml(data.id || avatar.id || "")}</span>
+      <span>使用者 ID：${escapeHtml(payload.user_id || avatar.user_id || "")}</span>
+      <span>照片已上傳：${photos.length} / 4</span>
+      <span>狀態：${escapeHtml(avatar.status || payload.status || "ready")}</span>
+      <button type="button" data-avatar-id="${escapeHtml(data.id || avatar.id || "")}">帶入試穿</button>
+    </div>
+  `;
+}
+
+function setFormResult(element, state, message) {
+  element.className = `form-result form-result-${state}`;
+  element.textContent = message;
 }
 
 function saveAdminToken() {

@@ -394,6 +394,44 @@ h2 {
   padding: 14px;
 }
 
+.form-result {
+  background: #f6faf7;
+  border: 1px solid #cddbd2;
+  border-radius: 8px;
+  color: #1f3d36;
+  grid-column: 1 / -1;
+  min-height: 58px;
+  padding: 14px;
+}
+
+.form-result-pending {
+  background: #fff8e8;
+  border-color: #e5bd75;
+  color: #5c3a05;
+}
+
+.form-result-ok {
+  background: #edf8f0;
+  border-color: #9fd3b1;
+  color: #1f6f43;
+}
+
+.form-result-error {
+  background: #fff2f0;
+  border-color: #e0aaa4;
+  color: #8f1d16;
+}
+
+.result-summary strong,
+.result-summary span {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.result-summary button {
+  margin-top: 6px;
+}
+
 .import-result-error {
   background: #fff2f0;
   border-color: #e0aaa4;
@@ -457,6 +495,11 @@ h2 {
 
 .grid-form button {
   align-self: end;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.68;
 }
 
 @media (max-width: 860px) {
