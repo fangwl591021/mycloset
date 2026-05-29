@@ -45,6 +45,24 @@ select {
   min-width: 220px;
 }
 
+.admin-status {
+  color: #69706d;
+  font-size: 13px;
+  min-width: 108px;
+}
+
+.admin-status[data-state="ok"] {
+  color: #1f6f43;
+}
+
+.admin-status[data-state="error"] {
+  color: #b3261e;
+}
+
+.admin-status[data-state="pending"] {
+  color: #7a5200;
+}
+
 .topbar span {
   color: #69706d;
   font-size: 14px;

@@ -2,6 +2,7 @@ const overviewEl = document.querySelector("#overview");
 const refreshOverviewButton = document.querySelector("#refreshOverview");
 const adminTokenInput = document.querySelector("#adminToken");
 const saveAdminTokenButton = document.querySelector("#saveAdminToken");
+const adminStatusEl = document.querySelector("#adminStatus");
 const productForm = document.querySelector("#productForm");
 const productResult = document.querySelector("#productResult");
 const tryonForm = document.querySelector("#tryonForm");
@@ -26,6 +27,7 @@ loadOverview();
 
 async function loadOverview() {
   try {
+    setAdminStatus("驗證中...", "pending");
     const data = await api("/api/admin/overview", adminOptions());
     const overview = data.overview || {};
     overviewEl.innerHTML = Object.entries(metricLabels)
@@ -34,37 +36,50 @@ async function loadOverview() {
         return `<div class="metric"><strong>${value}</strong><span>${label}</span></div>`;
       })
       .join("");
+    setAdminStatus("Token 正確", "ok");
   } catch (error) {
     overviewEl.innerHTML = `<div class="notice">${escapeHtml(error.message)}</div>`;
+    setAdminStatus(error.message, "error");
   }
 }
 
 async function submitProduct(event) {
   event.preventDefault();
-  const payload = Object.fromEntries(new FormData(productForm).entries());
-  payload.price = Number(payload.price || 0);
-  const data = await api("/api/products", {
-    ...adminOptions(),
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
-  productResult.textContent = JSON.stringify(data, null, 2);
-  await loadOverview();
+  try {
+    productResult.textContent = "新增中...";
+    const payload = Object.fromEntries(new FormData(productForm).entries());
+    payload.price = Number(payload.price || 0);
+    const data = await api("/api/products", {
+      ...adminOptions(),
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    productResult.textContent = JSON.stringify(data, null, 2);
+    await loadOverview();
+  } catch (error) {
+    productResult.textContent = error.message;
+  }
 }
 
 async function submitTryon(event) {
   event.preventDefault();
-  const payload = Object.fromEntries(new FormData(tryonForm).entries());
-  const data = await api("/api/tryons", {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
-  tryonResult.textContent = JSON.stringify(data, null, 2);
-  await loadOverview();
+  try {
+    tryonResult.textContent = "試穿任務建立中...";
+    const payload = Object.fromEntries(new FormData(tryonForm).entries());
+    const data = await api("/api/tryons", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    tryonResult.textContent = JSON.stringify(data, null, 2);
+    await loadOverview();
+  } catch (error) {
+    tryonResult.textContent = error.message;
+  }
 }
 
 function saveAdminToken() {
   localStorage.setItem(ADMIN_TOKEN_KEY, adminTokenInput.value.trim());
+  setAdminStatus("已儲存，驗證中...", "pending");
   loadOverview();
 }
 
@@ -92,6 +107,11 @@ async function api(path, options = {}) {
     throw new Error(data.error || `Request failed: ${response.status}`);
   }
   return data;
+}
+
+function setAdminStatus(message, state) {
+  adminStatusEl.textContent = message;
+  adminStatusEl.dataset.state = state;
 }
 
 function escapeHtml(value) {
