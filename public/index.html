@@ -156,6 +156,42 @@
         </article>
       </section>
 
+      <section class="storage-tool">
+        <article>
+          <h2>檔案上傳網址</h2>
+          <form id="storageForm" class="grid-form">
+            <label>
+              Owner ID
+              <input name="owner_id" value="demo-user-001" required>
+            </label>
+            <label>
+              類型
+              <select name="category">
+                <option value="members">會員照片</option>
+                <option value="products">商品圖片</option>
+                <option value="tryons">試穿結果</option>
+                <option value="outfits">穿搭投稿</option>
+                <option value="reports">報表</option>
+                <option value="temp">暫存</option>
+              </select>
+            </label>
+            <label>
+              檔名
+              <input name="filename" value="photo-demo.jpg" required>
+            </label>
+            <label>
+              方法
+              <select name="method">
+                <option value="PUT">上傳 PUT</option>
+                <option value="GET">下載 GET</option>
+              </select>
+            </label>
+            <button type="submit">產生短效網址</button>
+          </form>
+          <pre id="storageResult">尚未產生網址</pre>
+        </article>
+      </section>
+
       <section class="catalog">
         <div class="section-head">
           <h2>商品清單</h2>

@@ -41,6 +41,7 @@ These secrets must remain in Cloudflare Worker secrets only.
 ```text
 GET /api/health
 GET /api/storage/location
+POST /api/storage/presign
 GET /api/products
 POST /api/products
 POST /api/avatars
@@ -50,6 +51,28 @@ GET /api/admin/overview
 GET /api/line/webhook
 POST /line/webhook
 ```
+
+## Presigned File URLs
+
+`POST /api/storage/presign` creates a short-lived Wasabi URL for direct file upload or download. It only signs keys under the configured `WASABI_ALLOWED_PREFIX`, and only allows configured extensions.
+
+Example request:
+
+```json
+{
+  "owner_id": "demo-user-001",
+  "category": "members",
+  "filename": "front-photo.jpg",
+  "method": "PUT"
+}
+```
+
+The response includes:
+
+- `url`: short-lived Wasabi URL
+- `key`: object key inside the bucket
+- `method`: `PUT` or `GET`
+- `expires_in`: expiry seconds
 
 ## Admin-Protected Endpoints
 

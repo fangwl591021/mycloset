@@ -16,6 +16,18 @@ const CATEGORY_LABELS = new Set([
   "accessory"
 ]);
 
+const STORAGE_CATEGORIES = new Set([
+  "products",
+  "logos",
+  "members",
+  "tryons",
+  "outfits",
+  "orders",
+  "reports",
+  "line",
+  "temp"
+]);
+
 const POINTS = {
   submit_outfit: 10,
   approved_review: 50,
@@ -109,6 +121,10 @@ async function routeApi(request, env, url) {
 
   if (method === "GET" && path === "/api/storage/location") {
     return json(getStorageLocation(env));
+  }
+
+  if (method === "POST" && path === "/api/storage/presign") {
+    return createStoragePresignedUrl(request, env);
   }
 
   if (method === "GET" && path === "/api/integrations/params") {
@@ -228,6 +244,41 @@ async function createProduct(request, env) {
 
   return json({ id, status: "created", product, storage_mode: "wasabi-document" }, 201);
 }
+
+async function createStoragePresignedUrl(request, env) {
+  const body = await readJson(request);
+  requireFields(body, ["owner_id", "category", "filename", "method"]);
+  const method = body.method.toUpperCase();
+  if (!["PUT", "GET"].includes(method)) {
+    return json({ error: "method must be PUT or GET" }, 400);
+  }
+  if (!STORAGE_CATEGORIES.has(body.category)) {
+    return json({ error: "Unsupported storage category" }, 400);
+  }
+  const filename = sanitizeFilename(body.filename);
+  const extension = filename.split(".").pop().toLowerCase();
+  const allowedExtensions = splitCsv(env.WASABI_ALLOWED_EXTENSIONS || "jpg,jpeg,png,webp,pdf,csv,xlsx");
+  if (!allowedExtensions.includes(extension)) {
+    return json({ error: "Unsupported file extension" }, 400);
+  }
+  const key = body.key || buildStorageObjectKey(env, body.owner_id, body.category, filename);
+  assertAllowedStorageKey(env, key);
+  const keyExtension = key.split(".").pop().toLowerCase();
+  if (!allowedExtensions.includes(keyExtension)) {
+    return json({ error: "Unsupported object key extension" }, 400);
+  }
+  const expires = Math.min(Number(body.expires_seconds || env.WASABI_PRESIGNED_EXPIRES_SECONDS || 600), 900);
+  const url = await createWasabiPresignedUrl(env, method, key, expires);
+  return json({
+    method,
+    url,
+    key,
+    expires_in: expires,
+    content_type: body.content_type || guessContentType(extension),
+    storage_mode: "wasabi-presigned-url"
+  });
+}
+
 
 async function upsertAvatar(request, env) {
   const body = await readJson(request);
@@ -810,6 +861,19 @@ function buildDocumentKey(env, ownerId, category, filename) {
   return `${basePrefix}shops/${ownerId}/${category}/${yyyy}/${mm}/${filename}`;
 }
 
+function buildStorageObjectKey(env, ownerId, category, filename) {
+  return buildDocumentKey(env, ownerId, category, filename);
+}
+
+function assertAllowedStorageKey(env, key) {
+  const allowedPrefix = normalizePrefix(env.WASABI_ALLOWED_PREFIX || env.WASABI_BASE_PREFIX || "tonyuse/mycloset");
+  if (!key.startsWith(allowedPrefix)) {
+    const error = new Error("Object key is outside allowed prefix");
+    error.status = 400;
+    throw error;
+  }
+}
+
 async function putJsonDocument(env, key, document) {
   if (!hasWasabiSecrets(env)) return { skipped: true, reason: "missing_wasabi_secrets" };
   const body = JSON.stringify(document, null, 2);
@@ -937,8 +1001,71 @@ async function wasabiRequest(env, method, key, options = {}) {
   });
 }
 
+async function createWasabiPresignedUrl(env, method, key, expiresSeconds) {
+  if (!hasWasabiSecrets(env)) {
+    throw new Error("Wasabi secrets are not configured");
+  }
+  const endpoint = new URL(env.WASABI_ENDPOINT || "https://s3.us-west-1.wasabisys.com");
+  const bucket = env.WASABI_BUCKET || "tonyuse";
+  const region = env.WASABI_REGION || "us-west-1";
+  const forcePathStyle = env.WASABI_FORCE_PATH_STYLE !== "false";
+  const canonicalUri = forcePathStyle ? `/${bucket}/${encodePath(key)}` : `/${encodePath(key)}`;
+  const now = new Date();
+  const amzDate = toAmzDate(now);
+  const dateStamp = amzDate.slice(0, 8);
+  const credentialScope = `${dateStamp}/${region}/s3/aws4_request`;
+  const query = {
+    "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
+    "X-Amz-Credential": `${env.WASABI_ACCESS_KEY_ID}/${credentialScope}`,
+    "X-Amz-Date": amzDate,
+    "X-Amz-Expires": String(expiresSeconds),
+    "X-Amz-SignedHeaders": "host"
+  };
+  const canonicalQuery = canonicalizeQuery(query);
+  const canonicalRequest = [
+    method,
+    canonicalUri,
+    canonicalQuery,
+    `host:${endpoint.host}\n`,
+    "host",
+    "UNSIGNED-PAYLOAD"
+  ].join("\n");
+  const stringToSign = [
+    "AWS4-HMAC-SHA256",
+    amzDate,
+    credentialScope,
+    await sha256Hex(canonicalRequest)
+  ].join("\n");
+  const signingKey = await getSignatureKey(env.WASABI_SECRET_ACCESS_KEY, dateStamp, region, "s3");
+  const signature = await hmacHex(signingKey, stringToSign);
+  return `${endpoint.origin}${canonicalUri}?${canonicalQuery}&X-Amz-Signature=${signature}`;
+}
+
 function splitCsv(value) {
   return value.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function sanitizeFilename(filename) {
+  const clean = String(filename).split(/[\\/]/).pop().replace(/[^A-Za-z0-9._-]/g, "-");
+  if (!clean || !clean.includes(".")) {
+    const error = new Error("filename must include a safe extension");
+    error.status = 400;
+    throw error;
+  }
+  return clean;
+}
+
+function guessContentType(extension) {
+  const types = {
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    webp: "image/webp",
+    pdf: "application/pdf",
+    csv: "text/csv; charset=utf-8",
+    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  };
+  return types[extension] || "application/octet-stream";
 }
 
 function hasWasabiSecrets(env) {

@@ -18,6 +18,8 @@ const refreshEligibilityButton = document.querySelector("#refreshEligibility");
 const memberResult = document.querySelector("#memberResult");
 const stylistForm = document.querySelector("#stylistForm");
 const stylistResult = document.querySelector("#stylistResult");
+const storageForm = document.querySelector("#storageForm");
+const storageResult = document.querySelector("#storageResult");
 const outfitListEl = document.querySelector("#outfitList");
 const outfitFilter = document.querySelector("#outfitFilter");
 const refreshOutfitsButton = document.querySelector("#refreshOutfits");
@@ -42,6 +44,7 @@ avatarForm.addEventListener("submit", submitAvatar);
 refreshPointsButton.addEventListener("click", loadPoints);
 refreshEligibilityButton.addEventListener("click", loadEligibility);
 stylistForm.addEventListener("submit", submitStylist);
+storageForm.addEventListener("submit", submitStoragePresign);
 refreshOutfitsButton.addEventListener("click", loadOutfits);
 outfitFilter.addEventListener("change", loadOutfits);
 
@@ -162,6 +165,21 @@ async function submitStylist(event) {
     stylistResult.textContent = data.advice || JSON.stringify(data, null, 2);
   } catch (error) {
     stylistResult.textContent = error.message;
+  }
+}
+
+async function submitStoragePresign(event) {
+  event.preventDefault();
+  try {
+    storageResult.textContent = "產生中...";
+    const payload = Object.fromEntries(new FormData(storageForm).entries());
+    const data = await api("/api/storage/presign", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    storageResult.textContent = JSON.stringify(data, null, 2);
+  } catch (error) {
+    storageResult.textContent = error.message;
   }
 }
 

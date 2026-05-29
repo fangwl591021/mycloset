@@ -42,6 +42,7 @@ Tagline:
 
 - `GET /api/health`
 - `GET /api/storage/location`
+- `POST /api/storage/presign`
 - `GET /api/integrations/params`
 - `GET /api/line/webhook`
 - `POST /api/line/webhook`
