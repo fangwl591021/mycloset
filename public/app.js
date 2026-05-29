@@ -3,6 +3,9 @@ const refreshOverviewButton = document.querySelector("#refreshOverview");
 const adminTokenInput = document.querySelector("#adminToken");
 const saveAdminTokenButton = document.querySelector("#saveAdminToken");
 const adminStatusEl = document.querySelector("#adminStatus");
+const loginStatusEl = document.querySelector("#loginStatus");
+const lineLoginButton = document.querySelector("#lineLoginButton");
+const lineLogoutButton = document.querySelector("#lineLogoutButton");
 const productForm = document.querySelector("#productForm");
 const productResult = document.querySelector("#productResult");
 const productListEl = document.querySelector("#productList");
@@ -25,6 +28,7 @@ const outfitFilter = document.querySelector("#outfitFilter");
 const refreshOutfitsButton = document.querySelector("#refreshOutfits");
 const ADMIN_TOKEN_KEY = "mycloset_admin_token";
 let lastTryon = null;
+let loginConfig = null;
 
 const metricLabels = {
   products: "商品",
@@ -36,6 +40,8 @@ const metricLabels = {
 
 refreshOverviewButton.addEventListener("click", loadOverview);
 saveAdminTokenButton.addEventListener("click", saveAdminToken);
+lineLoginButton.addEventListener("click", lineLogin);
+lineLogoutButton.addEventListener("click", lineLogout);
 productForm.addEventListener("submit", submitProduct);
 refreshProductsButton.addEventListener("click", loadProducts);
 tryonForm.addEventListener("submit", submitTryon);
@@ -49,9 +55,75 @@ refreshOutfitsButton.addEventListener("click", loadOutfits);
 outfitFilter.addEventListener("change", loadOutfits);
 
 adminTokenInput.value = localStorage.getItem(ADMIN_TOKEN_KEY) || "";
+initLogin();
 loadProducts();
 loadOutfits();
 loadOverview();
+
+async function initLogin() {
+  try {
+    loginConfig = await api("/api/config");
+    const liffId = loginConfig?.line?.liff_id;
+    if (!liffId) {
+      setLoginStatus("請先設定 LINE_LIFF_ID，暫用手動會員 ID", "pending");
+      return;
+    }
+    if (!window.liff) {
+      setLoginStatus("LIFF SDK 載入失敗，暫用手動會員 ID", "error");
+      return;
+    }
+    await window.liff.init({ liffId });
+    if (!window.liff.isLoggedIn()) {
+      setLoginStatus("尚未登入 LINE", "pending");
+      lineLoginButton.hidden = false;
+      lineLogoutButton.hidden = true;
+      if (loginConfig.line.login_required) {
+        window.liff.login({ redirectUri: window.location.href.split("#")[0] });
+      }
+      return;
+    }
+    const profile = await window.liff.getProfile();
+    applyLineProfile(profile);
+  } catch (error) {
+    setLoginStatus(error.message, "error");
+  }
+}
+
+function lineLogin() {
+  if (!window.liff || !loginConfig?.line?.liff_id) {
+    setLoginStatus("尚未設定 LINE_LIFF_ID", "error");
+    return;
+  }
+  window.liff.login({ redirectUri: window.location.href.split("#")[0] });
+}
+
+function lineLogout() {
+  if (window.liff?.isLoggedIn()) {
+    window.liff.logout();
+  }
+  setLoginStatus("已登出，暫用手動會員 ID", "pending");
+  lineLoginButton.hidden = false;
+  lineLogoutButton.hidden = true;
+}
+
+function applyLineProfile(profile) {
+  const memberId = `line:${profile.userId}`;
+  setMemberId(memberId);
+  setLoginStatus(`已登入：${profile.displayName || profile.userId}`, "ok");
+  lineLoginButton.hidden = true;
+  lineLogoutButton.hidden = false;
+}
+
+function setMemberId(memberId) {
+  [
+    avatarForm?.elements.user_id,
+    tryonForm?.elements.user_id,
+    stylistForm?.elements.user_id,
+    storageForm?.elements.owner_id
+  ].forEach((input) => {
+    if (input) input.value = memberId;
+  });
+}
 
 async function loadOverview() {
   try {
@@ -390,6 +462,11 @@ async function api(path, options = {}) {
 function setAdminStatus(message, state) {
   adminStatusEl.textContent = message;
   adminStatusEl.dataset.state = state;
+}
+
+function setLoginStatus(message, state) {
+  loginStatusEl.textContent = message;
+  loginStatusEl.dataset.state = state;
 }
 
 function escapeHtml(value) {

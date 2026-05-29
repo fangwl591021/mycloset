@@ -43,6 +43,7 @@ Tagline:
 - `GET /api/health`
 - `GET /api/storage/location`
 - `POST /api/storage/presign`
+- `GET /api/config`
 - `GET /api/integrations/params`
 - `GET /api/line/webhook`
 - `POST /api/line/webhook`
@@ -95,4 +96,23 @@ wrangler secret put LINE_CHANNEL_SECRET
 wrangler secret put LINE_CHANNEL_ACCESS_TOKEN
 wrangler secret put OPENAI_API_KEY
 wrangler secret put ADMIN_API_TOKEN
+```
+
+## LINE Login / LIFF
+
+Create a LIFF app in LINE Developers and fill in:
+
+| Field | Value |
+| --- | --- |
+| LIFF app name | `My Closet AI Login` |
+| Size | `Full` |
+| Endpoint URL | `https://mycloset.fangwl591021.workers.dev/` |
+| Scope | `profile`, `openid` |
+| Bot link feature | `On`, select the My Closet AI LINE OA |
+
+After LINE generates the LIFF ID, set these Worker vars:
+
+```text
+LINE_LIFF_ID={your-liff-id}
+LINE_LIFF_URL=https://liff.line.me/{your-liff-id}
 ```

@@ -110,6 +110,10 @@ async function routeApi(request, env, url) {
         api_key_configured: Boolean(env.OPENAI_API_KEY)
       },
       admin_api_token_configured: Boolean(env.ADMIN_API_TOKEN),
+      line: {
+        liff_id_configured: Boolean(env.LINE_LIFF_ID),
+        login_required: env.LINE_LOGIN_REQUIRED === "true"
+      },
       storage: {
         provider: env.STORAGE_PROVIDER || "wasabi",
         access_key_configured: Boolean(env.WASABI_ACCESS_KEY_ID),
@@ -129,6 +133,10 @@ async function routeApi(request, env, url) {
 
   if (method === "GET" && path === "/api/integrations/params") {
     return json(getIntegrationParams(env));
+  }
+
+  if (method === "GET" && path === "/api/config") {
+    return json(getPublicConfig(env));
   }
 
   if (path === "/api/line/webhook") {
@@ -678,6 +686,8 @@ function getIntegrationParams(env) {
       webhook_path: env.LINE_WEBHOOK_PATH || "/line/webhook",
       webhook_url: env.LINE_WEBHOOK_URL || `${env.PUBLIC_BASE_URL || "https://mycloset.fangwl591021.workers.dev"}/line/webhook`,
       liff_url: env.LINE_LIFF_URL || env.PUBLIC_BASE_URL || "https://mycloset.fangwl591021.workers.dev/",
+      liff_id: env.LINE_LIFF_ID || "",
+      login_required: env.LINE_LOGIN_REQUIRED === "true",
       reply_enabled: env.LINE_REPLY_ENABLED !== "false",
       signature_secret_configured: Boolean(env.LINE_CHANNEL_SECRET),
       access_token_configured: Boolean(env.LINE_CHANNEL_ACCESS_TOKEN),
@@ -694,6 +704,17 @@ function getIntegrationParams(env) {
       "OPENAI_API_KEY",
       "ADMIN_API_TOKEN"
     ]
+  };
+}
+
+function getPublicConfig(env) {
+  return {
+    public_base_url: env.PUBLIC_BASE_URL || "https://mycloset.fangwl591021.workers.dev",
+    line: {
+      liff_id: env.LINE_LIFF_ID || "",
+      liff_url: env.LINE_LIFF_URL || env.PUBLIC_BASE_URL || "https://mycloset.fangwl591021.workers.dev/",
+      login_required: env.LINE_LOGIN_REQUIRED === "true"
+    }
   };
 }
 

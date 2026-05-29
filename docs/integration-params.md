@@ -29,6 +29,8 @@ All non-secret integration settings are stored in `wrangler.toml` under `[vars]`
 | LINE webhook URL | `LINE_WEBHOOK_URL` | `https://mycloset.fangwl591021.workers.dev/line/webhook` |
 | LINE reply toggle | `LINE_REPLY_ENABLED` | `true` |
 | LINE LIFF URL | `LINE_LIFF_URL` | `https://mycloset.fangwl591021.workers.dev/` |
+| LINE LIFF ID | `LINE_LIFF_ID` | Paste the LIFF ID from LINE Developers after creating the LIFF app |
+| Require LINE login | `LINE_LOGIN_REQUIRED` | `false` for testing, `true` to force LIFF login |
 | LINE welcome text | `LINE_WELCOME_TEXT` | `歡迎使用 My Closet AI。請點選連結建立個人模特兒並開始 AI 試穿。` |
 
 ## Worker Secrets
@@ -68,3 +70,24 @@ GET https://mycloset.fangwl591021.workers.dev/api/line/webhook
 ```
 
 The webhook verifies `x-line-signature` when `LINE_CHANNEL_SECRET` is configured. If `LINE_REPLY_ENABLED=true` and `LINE_CHANNEL_ACCESS_TOKEN` is configured, the Worker replies to message/follow events with the configured LIFF URL.
+
+## LINE Login / LIFF Settings
+
+Create one LIFF app in the same LINE Login channel and use these values:
+
+| LINE Developers field | Value |
+| --- | --- |
+| LIFF app name | `My Closet AI Login` |
+| Size | `Full` |
+| Endpoint URL | `https://mycloset.fangwl591021.workers.dev/` |
+| Scope | `profile`, `openid` |
+| Bot link feature | `On`, select the My Closet AI LINE OA |
+| Scan QR | `Off` |
+| Module mode | `Off` |
+
+After LINE generates the LIFF ID, set these Worker variables:
+
+```text
+LINE_LIFF_ID={your-liff-id}
+LINE_LIFF_URL=https://liff.line.me/{your-liff-id}
+```

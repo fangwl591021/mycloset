@@ -12,6 +12,11 @@
         <strong>My Closet AI</strong>
         <span>AI 真人虛擬試穿 SaaS</span>
       </div>
+      <div class="login-tools">
+        <span id="loginStatus" class="login-status">LINE Login 尚未初始化</span>
+        <button id="lineLoginButton" type="button">LINE Login</button>
+        <button id="lineLogoutButton" type="button" hidden>登出</button>
+      </div>
       <div class="admin-tools">
         <label>
           管理 Token
@@ -275,6 +280,7 @@
       </section>
     </main>
 
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

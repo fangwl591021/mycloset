@@ -39,7 +39,8 @@ input[type="file"] {
   gap: 12px;
 }
 
-.admin-tools {
+.admin-tools,
+.login-tools {
   align-items: end;
   display: flex;
   gap: 10px;
@@ -64,6 +65,28 @@ input[type="file"] {
 }
 
 .admin-status[data-state="pending"] {
+  color: #7a5200;
+}
+
+.login-tools {
+  align-items: center;
+}
+
+.login-status {
+  color: #69706d;
+  font-size: 13px;
+  max-width: 240px;
+}
+
+.login-status[data-state="ok"] {
+  color: #1f6f43;
+}
+
+.login-status[data-state="error"] {
+  color: #b3261e;
+}
+
+.login-status[data-state="pending"] {
   color: #7a5200;
 }
 
