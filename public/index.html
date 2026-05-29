@@ -16,6 +16,7 @@
         <span id="loginStatus" class="login-status">LINE Login 尚未初始化</span>
         <button id="lineLoginButton" type="button">LINE Login</button>
         <button id="lineLogoutButton" type="button" hidden>登出</button>
+        <a class="quick-link" href="#externalImport">匯入商品</a>
       </div>
       <div class="admin-tools">
         <label>
@@ -210,6 +211,46 @@
             <button type="submit">產生短效網址</button>
           </form>
           <pre id="storageResult">尚未產生網址</pre>
+        </article>
+      </section>
+
+      <section id="externalImport" class="import-tool">
+        <article>
+          <div class="section-head">
+            <h2>貼網址匯入測試商品</h2>
+            <span class="section-note">支援 Amazon、淘寶、天貓或一般商品頁；抓不到資料時可手動補名稱與圖片。</span>
+          </div>
+          <form id="externalProductForm" class="grid-form">
+            <label class="wide-field">
+              商品網址
+              <input name="source_url" placeholder="貼上 Amazon / 淘寶 / 天貓商品網址" required>
+            </label>
+            <label>
+              分類
+              <select name="category">
+                <option value="jacket">外套</option>
+                <option value="top">上衣</option>
+                <option value="pants">長褲</option>
+                <option value="dress">洋裝</option>
+                <option value="shoes">鞋子</option>
+                <option value="accessory">配件</option>
+              </select>
+            </label>
+            <label>
+              名稱（可空白）
+              <input name="name" placeholder="抓不到標題時才需要填">
+            </label>
+            <label>
+              圖片網址（可空白）
+              <input name="image_url" placeholder="抓不到圖片時可貼圖片網址">
+            </label>
+            <label>
+              價格（可空白）
+              <input name="price" type="number" placeholder="0">
+            </label>
+            <button type="submit">匯入商品</button>
+          </form>
+          <pre id="externalProductResult">等待貼上商品網址</pre>
         </article>
       </section>
 

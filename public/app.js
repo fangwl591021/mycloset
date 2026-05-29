@@ -8,6 +8,8 @@ const lineLoginButton = document.querySelector("#lineLoginButton");
 const lineLogoutButton = document.querySelector("#lineLogoutButton");
 const productForm = document.querySelector("#productForm");
 const productResult = document.querySelector("#productResult");
+const externalProductForm = document.querySelector("#externalProductForm");
+const externalProductResult = document.querySelector("#externalProductResult");
 const productListEl = document.querySelector("#productList");
 const refreshProductsButton = document.querySelector("#refreshProducts");
 const tryonForm = document.querySelector("#tryonForm");
@@ -43,6 +45,7 @@ saveAdminTokenButton.addEventListener("click", saveAdminToken);
 lineLoginButton.addEventListener("click", lineLogin);
 lineLogoutButton.addEventListener("click", lineLogout);
 productForm.addEventListener("submit", submitProduct);
+externalProductForm.addEventListener("submit", submitExternalProduct);
 refreshProductsButton.addEventListener("click", loadProducts);
 tryonForm.addEventListener("submit", submitTryon);
 outfitForm.addEventListener("submit", submitOutfit);
@@ -163,6 +166,31 @@ async function submitProduct(event) {
     await loadOverview();
   } catch (error) {
     productResult.textContent = error.message;
+  }
+}
+
+async function submitExternalProduct(event) {
+  event.preventDefault();
+  try {
+    externalProductResult.textContent = "匯入中...";
+    const payload = Object.fromEntries(new FormData(externalProductForm).entries());
+    payload.price = Number(payload.price || 0);
+    Object.keys(payload).forEach((key) => {
+      if (payload[key] === "") delete payload[key];
+    });
+    const data = await api("/api/products/import-url", {
+      ...adminOptions(),
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    externalProductResult.textContent = JSON.stringify(data, null, 2);
+    if (data.id) {
+      tryonForm.elements.product_id.value = data.id;
+    }
+    await loadProducts();
+    await loadOverview();
+  } catch (error) {
+    externalProductResult.textContent = error.message;
   }
 }
 
