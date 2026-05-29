@@ -104,7 +104,7 @@ Create a LIFF app in LINE Developers and fill in:
 
 | Field | Value |
 | --- | --- |
-| LIFF app name | `My Closet AI Login` |
+| LIFF app name | `MYCLOSET` |
 | Size | `Full` |
 | Endpoint URL | `https://mycloset.fangwl591021.workers.dev/` |
 | Scope | `profile`, `openid` |
@@ -113,6 +113,6 @@ Create a LIFF app in LINE Developers and fill in:
 After LINE generates the LIFF ID, set these Worker vars:
 
 ```text
-LINE_LIFF_ID={your-liff-id}
-LINE_LIFF_URL=https://liff.line.me/{your-liff-id}
+LINE_LIFF_ID=2008729640-kPAvtOP4
+LINE_LIFF_URL=https://liff.line.me/2008729640-kPAvtOP4
 ```
