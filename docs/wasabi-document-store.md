@@ -74,6 +74,17 @@ The response includes:
 - `method`: `PUT` or `GET`
 - `expires_in`: expiry seconds
 
+## Avatar Photo Flow
+
+The personal model setup now uploads the required photos before saving avatar metadata:
+
+- front photo
+- left 45-degree photo
+- right 45-degree photo
+- full-body photo
+
+Each file is uploaded through a short-lived Wasabi `PUT` URL, then the resulting object key is stored in the avatar JSON record under `photo_front_url`, `photo_left_45_url`, `photo_right_45_url`, and `photo_full_body_url`.
+
 ## Admin-Protected Endpoints
 
 These endpoints require either:

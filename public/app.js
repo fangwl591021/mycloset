@@ -138,8 +138,17 @@ async function submitOutfit(event) {
 async function submitAvatar(event) {
   event.preventDefault();
   try {
-    avatarResult.textContent = "儲存中...";
-    const payload = Object.fromEntries(new FormData(avatarForm).entries());
+    avatarResult.textContent = "照片上傳中...";
+    const formData = new FormData(avatarForm);
+    const payload = Object.fromEntries(formData.entries());
+    const userId = payload.user_id;
+    const photoMap = await uploadAvatarPhotos(userId, formData);
+    Object.assign(payload, photoMap);
+    delete payload.photo_front;
+    delete payload.photo_left_45;
+    delete payload.photo_right_45;
+    delete payload.photo_full_body;
+    avatarResult.textContent = "照片已上傳，Avatar 建檔中...";
     const data = await api("/api/avatars", {
       method: "POST",
       body: JSON.stringify(payload)
@@ -150,6 +159,52 @@ async function submitAvatar(event) {
     await loadOverview();
   } catch (error) {
     avatarResult.textContent = error.message;
+  }
+}
+
+async function uploadAvatarPhotos(userId, formData) {
+  const slots = [
+    ["photo_front", "photo_front_url"],
+    ["photo_left_45", "photo_left_45_url"],
+    ["photo_right_45", "photo_right_45_url"],
+    ["photo_full_body", "photo_full_body_url"]
+  ];
+  const result = {};
+  for (const [fieldName, payloadField] of slots) {
+    const file = formData.get(fieldName);
+    if (!(file instanceof File) || file.size === 0) {
+      throw new Error(`請上傳 ${fieldName}`);
+    }
+    validateImageFile(file);
+    const presign = await api("/api/storage/presign", {
+      method: "POST",
+      body: JSON.stringify({
+        owner_id: userId,
+        category: "members",
+        filename: `${fieldName}-${Date.now()}-${file.name}`,
+        method: "PUT"
+      })
+    });
+    const upload = await fetch(presign.url, {
+      method: "PUT",
+      body: file
+    });
+    if (!upload.ok) {
+      throw new Error(`照片上傳失敗: ${fieldName}`);
+    }
+    result[payloadField] = presign.key;
+    result[payloadField.replace("_url", "_key")] = presign.key;
+  }
+  return result;
+}
+
+function validateImageFile(file) {
+  const allowed = ["image/jpeg", "image/png", "image/webp"];
+  if (!allowed.includes(file.type)) {
+    throw new Error("照片格式只支援 jpg、png、webp");
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error("單張照片不可超過 5MB");
   }
 }
 

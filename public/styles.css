@@ -19,6 +19,10 @@ select {
   font: inherit;
 }
 
+input[type="file"] {
+  background: #ffffff;
+}
+
 .topbar {
   align-items: center;
   background: #ffffff;
